@@ -1,11 +1,14 @@
 {
-  "name": "adaptivecapes-relay-server",
+  "name": "adaptivecapes-relay",
   "version": "1.0.0",
-  "description": "AdaptiveCapes Cloud Relay",
+  "description": "AdaptiveCapes Cloud Relay Server",
   "main": "server.js",
   "type": "module",
   "scripts": {
     "start": "node server.js"
+  },
+  "engines": {
+    "node": ">=20"
   },
   "dependencies": {
     "cors": "^2.8.5",
