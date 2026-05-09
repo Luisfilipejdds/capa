@@ -20,6 +20,8 @@ const sha256Pattern = /^[0-9a-f]{64}$/i;
 const base64Pattern = /^[A-Za-z0-9+/]*={0,2}$/;
 const pngSignature = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
 
+const startedAt = Date.now();
+
 app.disable("x-powered-by");
 app.set("trust proxy", true);
 app.use(express.json({ limit: `${jsonLimitBytes}b` }));
@@ -33,7 +35,11 @@ app.get("/api/v1", (req, res) => {
 });
 
 app.get("/health", (req, res) => {
-  return res.json(statusPayload());
+  return res.json(healthPayload());
+});
+
+app.get("/api/v1/health", (req, res) => {
+  return res.json(healthPayload());
 });
 
 app.post("/api/v1/capes/:uuid", async (req, res) => {
@@ -301,6 +307,17 @@ function statusPayload() {
     service: "AdaptiveCapes Relay",
     version: "1.0.0",
     status: "online"
+  };
+}
+
+function healthPayload() {
+  return {
+    ok: true,
+    status: "ok",
+    service: "adaptivecapes-relay",
+    version: "1.0.0",
+    timestamp: new Date().toISOString(),
+    uptime: Math.floor((Date.now() - startedAt) / 1000)
   };
 }
 
