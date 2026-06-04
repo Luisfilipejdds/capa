@@ -88,6 +88,14 @@ color:#31b7ff;
 app.get("/api/v1", (req, res) => {
   return res.json(statusPayload());
 });
+app.get("/health", (req, res) => {
+  return res.json(healthPayload());
+});
+
+app.get("/api/v1/health", (req, res) => {
+  return res.json(healthPayload());
+});
+
 app.post("/api/v1/capes/:uuid", async (req, res) => {
   try {
     const uuid = normalizeUuid(req.params.uuid);
@@ -162,27 +170,6 @@ app.post("/api/v1/capes/:uuid", async (req, res) => {
   }
 });
     
-
-    await writeIndex(metadata);
-
-console.info(
-  `[UPLOAD] ${username || "unknown"} (${uuid.substring(0, 4)}****) size=${png.length}`
-);
-    );
-
-    return res.status(200).json(toCapeResponse(metadata[uuid], png.toString("base64")));
-  } catch (error) {
-    return handleError(res, error);
-  }
-});
-
-/*
- * IMPORTANTE:
- * Esta rota precisa ficar ANTES de:
- * GET /api/v1/capes/:uuid
- *
- * Se ficar depois, o Express interpreta "bulk" como uuid.
- */
 app.get("/api/v1/capes/bulk", async (req, res) => {
   try {
     const raw = String(req.query.uuids ?? "").trim();
