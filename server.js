@@ -91,7 +91,105 @@ app.get("/api/v1", (req, res) => {
 app.get("/health", (req, res) => {
   return res.json(healthPayload());
 });
+app.get("/cape-image/:uuid.png", async (req, res) => {
+  try {
+    const uuid = normalizeUuid(req.params.uuid);
+    const metadata = await readIndex();
+    const entry = metadata[uuid];
 
+    if (!entry || !entry.visible || !sha256Pattern.test(entry.hash)) {
+      return res.status(404).json({ ok: false, error: "not_found" });
+    }
+
+    const file = path.join(capesDir, uuid, `${entry.hash}.png`);
+    const png = await fs.readFile(file);
+
+    validatePng(png);
+
+    res.setHeader("Content-Type", "image/png");
+    res.setHeader("Cache-Control", "public, max-age=60");
+
+    return res.status(200).send(png);
+  } catch (error) {
+    return handleError(res, error);
+  }
+});
+
+app.get("/capes", async (req, res) => {
+  try {
+    const metadata = await readIndex();
+
+    const capes = Object.values(metadata)
+      .filter(entry => entry?.visible === true && entry?.hash)
+      .sort((a, b) => Number(b.updatedAt ?? 0) - Number(a.updatedAt ?? 0));
+
+    const cards = capes.map(entry => `
+      <div class="cape-card">
+        <img src="/cape-image/${entry.uuid}.png" alt="Cape ${escapeHtml(entry.username || entry.uuid)}">
+        <h2>${escapeHtml(entry.username || "unknown")}</h2>
+        <p>${escapeHtml(entry.uuid)}</p>
+      </div>
+    `).join("");
+
+    return res.type("html").send(`
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>AdaptiveCaps Gallery</title>
+<style>
+body{
+background:#0f1720;
+color:white;
+font-family:Arial,sans-serif;
+margin:0;
+padding:30px;
+}
+h1{
+color:#31b7ff;
+}
+.grid{
+display:grid;
+grid-template-columns:repeat(auto-fill,minmax(180px,1fr));
+gap:20px;
+}
+.cape-card{
+background:#182331;
+padding:18px;
+border-radius:14px;
+text-align:center;
+box-shadow:0 0 20px rgba(0,0,0,.25);
+}
+.cape-card img{
+max-width:128px;
+image-rendering:pixelated;
+background:#263548;
+border-radius:8px;
+padding:10px;
+}
+.cape-card h2{
+font-size:18px;
+margin:12px 0 6px;
+}
+.cape-card p{
+font-size:11px;
+color:#aeb9c8;
+word-break:break-all;
+}
+</style>
+</head>
+<body>
+<h1>AdaptiveCaps Gallery</h1>
+<div class="grid">
+${cards || "<p>Nenhuma capa visível encontrada.</p>"}
+</div>
+</body>
+</html>
+    `);
+  } catch (error) {
+    return handleError(res, error);
+  }
+});
 app.get("/api/v1/health", (req, res) => {
   return res.json(healthPayload());
 });
@@ -150,6 +248,8 @@ app.post("/api/v1/capes/:uuid", async (req, res) => {
     await fs.mkdir(playerDir, { recursive: true });
     await fs.writeFile(path.join(playerDir, `${hash}.png`), png);
 
+    await deleteOldPlayerCapes(uuid, hash);
+    
     metadata[uuid] = {
       uuid,
       username,
@@ -293,6 +393,31 @@ async function writeIndex(metadata) {
   await fs.mkdir(dataDir, { recursive: true });
   await fs.writeFile(indexFile, JSON.stringify(metadata, null, 2));
 }
+async function deleteOldPlayerCapes(uuid, activeHash) {
+  const playerDir = path.join(capesDir, uuid);
+
+  try {
+    const files = await fs.readdir(playerDir);
+
+    for (const file of files) {
+      if (!file.endsWith(".png")) {
+        continue;
+      }
+
+      const hash = file.slice(0, -4);
+
+      if (hash !== activeHash) {
+        await fs.rm(path.join(playerDir, file), {
+          force: true
+        });
+      }
+    }
+  } catch (error) {
+    if (error.code !== "ENOENT") {
+      throw error;
+    }
+  }
+}
 
 function decodeCape(value) {
   if (typeof value !== "string" || value.length === 0) {
@@ -353,6 +478,14 @@ function toCapeResponse(entry, capePngBase64) {
     capePngBase64,
     updatedAt: Number.isSafeInteger(entry.updatedAt) ? entry.updatedAt : 0
   };
+}
+function escapeHtml(value) {
+  return String(value ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
 }
 
 function statusPayload() {
