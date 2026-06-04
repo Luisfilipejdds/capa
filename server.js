@@ -29,19 +29,65 @@ app.use(express.json({ limit: `${jsonLimitBytes}b` }));
 app.get("/", (req, res) => {
   return res.json(statusPayload());
 });
+app.get("/status", async (req, res) => {
+  try {
+    const metadata = await readIndex();
 
+    const totalPlayers = Object.keys(metadata).length;
+
+    const visibleCapes = Object.values(metadata).filter(
+      entry => entry?.visible === true
+    ).length;
+
+    return res.type("html").send(`
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>AdaptiveCaps Status</title>
+<style>
+body{
+background:#0f1720;
+color:white;
+font-family:Arial,sans-serif;
+display:flex;
+justify-content:center;
+align-items:center;
+height:100vh;
+margin:0;
+}
+.card{
+background:#182331;
+padding:30px;
+border-radius:16px;
+width:500px;
+box-shadow:0 0 20px rgba(0,0,0,.3);
+}
+h1{
+margin-top:0;
+color:#31b7ff;
+}
+</style>
+</head>
+<body>
+<div class="card">
+<h1>AdaptiveCaps Relay</h1>
+<p>Status: Online</p>
+<p>Version: 1.0.0</p>
+<p>Uptime: ${Math.floor((Date.now() - startedAt) / 1000)} segundos</p>
+<p>Registered Players: ${totalPlayers}</p>
+<p>Visible Capes: ${visibleCapes}</p>
+</div>
+</body>
+</html>
+    `);
+  } catch (error) {
+    return handleError(res, error);
+  }
+});
 app.get("/api/v1", (req, res) => {
   return res.json(statusPayload());
 });
-
-app.get("/health", (req, res) => {
-  return res.json(healthPayload());
-});
-
-app.get("/api/v1/health", (req, res) => {
-  return res.json(healthPayload());
-});
-
 app.post("/api/v1/capes/:uuid", async (req, res) => {
   try {
     const uuid = normalizeUuid(req.params.uuid);
@@ -73,7 +119,7 @@ app.post("/api/v1/capes/:uuid", async (req, res) => {
       await writeIndex(metadata);
 
       console.info(
-        `AdaptiveCapes visibility changed username=${username || "unknown"} uuid=${uuid} visible=false`
+        `[VISIBILITY] ${username || "unknown"} (${uuid.substring(0, 4)}****) invisible`
       );
 
       return res.status(200).json(toCapeResponse(metadata[uuid], ""));
@@ -107,7 +153,21 @@ app.post("/api/v1/capes/:uuid", async (req, res) => {
     await writeIndex(metadata);
 
     console.info(
-      `AdaptiveCapes upload accepted username=${username || "unknown"} uuid=${uuid} size=${png.length} visible=true`
+      `[UPLOAD] ${username || "unknown"} (${uuid.substring(0, 4)}****) size=${png.length}`
+    );
+
+    return res.status(200).json(toCapeResponse(metadata[uuid], png.toString("base64")));
+  } catch (error) {
+    return handleError(res, error);
+  }
+});
+    
+
+    await writeIndex(metadata);
+
+console.info(
+  `[UPLOAD] ${username || "unknown"} (${uuid.substring(0, 4)}****) size=${png.length}`
+);
     );
 
     return res.status(200).json(toCapeResponse(metadata[uuid], png.toString("base64")));
