@@ -71,6 +71,11 @@ app.post("/api/v1/capes/:uuid", async (req, res) => {
       };
 
       await writeIndex(metadata);
+
+      console.info(
+        `AdaptiveCapes visibility changed username=${username || "unknown"} uuid=${uuid} visible=false`
+      );
+
       return res.status(200).json(toCapeResponse(metadata[uuid], ""));
     }
 
@@ -101,7 +106,9 @@ app.post("/api/v1/capes/:uuid", async (req, res) => {
 
     await writeIndex(metadata);
 
-    console.info(`AdaptiveCapes upload accepted uuid=${uuid} size=${png.length} visible=true`);
+    console.info(
+      `AdaptiveCapes upload accepted username=${username || "unknown"} uuid=${uuid} size=${png.length} visible=true`
+    );
 
     return res.status(200).json(toCapeResponse(metadata[uuid], png.toString("base64")));
   } catch (error) {
