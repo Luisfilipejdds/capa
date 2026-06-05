@@ -590,19 +590,15 @@ function healthPayload() {
   };
 }
 
-function httpError(statusCode, message) {
-  return Object.assign(new Error(message), {
-    statusCode
-  });
-}
-
 function handleError(res, error) {
   const status = Number.isInteger(error?.statusCode)
     ? error.statusCode
     : 500;
 
   if (status >= 500) {
-    console.error(`AdaptiveCapes Relay internal error: ${error?.name ?? "Error"}`);
+    console.error("=== ADAPTIVECAPS RELAY ERROR ===");
+    console.error(error);
+    console.error(error?.stack);
   }
 
   return res.status(status).json({
