@@ -40,6 +40,7 @@ app.get("/status", async (req, res) => {
     ).length;
 
     const totalCapeFiles = await countCapeFiles();
+    const storageSizeMb = await getStorageSizeMb();
     
     return res.type("html").send(`
 <!DOCTYPE html>
@@ -80,6 +81,7 @@ color:#31b7ff;
 <p>Registered Players: ${totalPlayers}</p>
 <p>Visible Capes: ${visibleCapes}</p>
 <p>Total Cape Files: ${totalCapeFiles}</p>
+<p>Stored Data Size: ${storageSizeMb} MB</p>
 </div>
 </body>
 </html>
@@ -542,7 +544,32 @@ function escapeHtml(value) {
     .replace(/"/g, "&quot;")
     .replace(/'/g, "&#039;");
 }
+async function getStorageSizeMb() {
+  let totalBytes = 0;
 
+  async function scan(dir) {
+    try {
+      const entries = await fs.readdir(dir, { withFileTypes: true });
+
+      for (const entry of entries) {
+        const fullPath = path.join(dir, entry.name);
+
+        if (entry.isDirectory()) {
+          await scan(fullPath);
+        } else {
+          const stats = await fs.stat(fullPath);
+          totalBytes += stats.size;
+        }
+      }
+    } catch {
+      // ignora erros
+    }
+  }
+
+  await scan(capesDir);
+
+  return (totalBytes / 1024 / 1024).toFixed(2);
+}
 function statusPayload() {
   return {
     ok: true,
