@@ -400,7 +400,24 @@ async function loadCape(uuid) {
 
   return toCapeResponse(entry, png.toString("base64"));
 }
+async function readIndex() {
+  try {
+    const raw = await fs.readFile(indexFile, "utf8");
+    const parsed = JSON.parse(raw);
 
+    if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+      return parsed;
+    }
+
+    return {};
+  } catch (error) {
+    if (error.code === "ENOENT") {
+      return {};
+    }
+
+    throw error;
+  }
+}
 async function countCapeFiles() {
   let total = 0;
 
