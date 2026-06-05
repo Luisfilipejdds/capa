@@ -420,6 +420,19 @@ async function readIndex() {
     throw error;
   }
 }
+
+async function writeIndex(metadata) {
+  await fs.mkdir(path.dirname(indexFile), {
+    recursive: true
+  });
+
+  await fs.writeFile(
+    indexFile,
+    JSON.stringify(metadata, null, 2),
+    "utf8"
+  );
+}
+
 async function countCapeFiles() {
   let total = 0;
 
