@@ -123,13 +123,22 @@ app.get("/capes", async (req, res) => {
       .filter(entry => entry?.visible === true && entry?.hash)
       .sort((a, b) => Number(b.updatedAt ?? 0) - Number(a.updatedAt ?? 0));
 
-    const cards = capes.map(entry => `
-      <div class="cape-card">
+const cards = capes.map(entry => {
+  const updated = entry.updatedAt
+    ? new Date(entry.updatedAt).toLocaleString("pt-BR")
+    : "Desconhecido";
+
+  return `
+    <div class="cape-card">
+      <a href="/cape-image/${entry.uuid}.png" target="_blank">
         <img src="/cape-image/${entry.uuid}.png" alt="Cape ${escapeHtml(entry.username || entry.uuid)}">
-        <h2>${escapeHtml(entry.username || "unknown")}</h2>
-        <p>${escapeHtml(entry.uuid)}</p>
-      </div>
-    `).join("");
+      </a>
+      <h2>${escapeHtml(entry.username || "unknown")}</h2>
+      <p class="muted">Atualizada: ${escapeHtml(updated)}</p>
+      <p class="hash">Hash: ${escapeHtml(String(entry.hash || "").slice(0, 12))}...</p>
+    </div>
+  `;
+}).join("");
 
     return res.type("html").send(`
 <!DOCTYPE html>
@@ -175,6 +184,25 @@ margin:12px 0 6px;
 font-size:11px;
 color:#aeb9c8;
 word-break:break-all;
+}
+.muted{
+color:#aeb9c8;
+font-size:12px;
+}
+
+.hash{
+font-size:10px;
+color:#718096;
+word-break:break-all;
+}
+
+.cape-card a{
+display:inline-block;
+}
+
+.cape-card img:hover{
+transform:scale(1.08);
+transition:.15s;
 }
 </style>
 </head>
