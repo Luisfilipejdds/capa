@@ -39,6 +39,8 @@ app.get("/status", async (req, res) => {
       entry => entry?.visible === true
     ).length;
 
+    const totalCapeFiles = await countCapeFiles();
+    
     return res.type("html").send(`
 <!DOCTYPE html>
 <html>
@@ -77,6 +79,7 @@ color:#31b7ff;
 <p>Uptime: ${Math.floor((Date.now() - startedAt) / 1000)} segundos</p>
 <p>Registered Players: ${totalPlayers}</p>
 <p>Visible Capes: ${visibleCapes}</p>
+<p>Total Cape Files: ${totalCapeFiles}</p>
 </div>
 </body>
 </html>
@@ -398,30 +401,37 @@ async function loadCape(uuid) {
   return toCapeResponse(entry, png.toString("base64"));
 }
 
-async function readIndex() {
-  try {
-    const raw = await fs.readFile(indexFile, "utf8");
-    const parsed = JSON.parse(raw);
+async function countCapeFiles() {
+  let total = 0;
 
-    if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
-      return parsed;
+  async function walk(dir) {
+    let entries = [];
+
+    try {
+      entries = await fs.readdir(dir, {
+        withFileTypes: true
+      });
+    } catch {
+      return;
     }
 
-    return {};
-  } catch (error) {
-    if (error.code === "ENOENT") {
-      return {};
-    }
+    for (const entry of entries) {
+      const fullPath = path.join(dir, entry.name);
 
-    throw error;
+      if (entry.isDirectory()) {
+        await walk(fullPath);
+      } else if (entry.isFile() && entry.name.endsWith(".png")) {
+        total++;
+      }
+    }
   }
-}
 
-async function writeIndex(metadata) {
-  await fs.mkdir(dataDir, { recursive: true });
-  await fs.writeFile(indexFile, JSON.stringify(metadata, null, 2));
+  await walk(capesDir);
+
+  return total;
 }
 async function deleteOldPlayerCapes(uuid, activeHash) {
+  
   const playerDir = path.join(capesDir, uuid);
 
   try {
