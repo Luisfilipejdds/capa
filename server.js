@@ -107,7 +107,21 @@ app.get("/cape-image/:uuid.png", async (req, res) => {
       return res.status(404).json({ ok: false, error: "not_found" });
     }
 
-    const file = path.join(capesDir, uuid, `${entry.hash}.png`);
+let file;
+
+if (entry.renderFile) {
+  file = path.join(capesDir, uuid, entry.renderFile);
+} else {
+  const legacyFile = path.join(capesDir, uuid, `${entry.hash}.png`);
+  const renderFile = path.join(capesDir, uuid, "renders", `${entry.hash}.png`);
+
+  try {
+    await fs.access(renderFile);
+    file = renderFile;
+  } catch {
+    file = legacyFile;
+  }
+}
     const png = await fs.readFile(file);
 
     validatePng(png);
@@ -455,9 +469,21 @@ async function loadCape(uuid) {
     throw httpError(500, "corrupt_metadata");
   }
 
-  const file = entry.renderFile
-    ? path.join(capesDir, uuid, entry.renderFile)
-    : path.join(capesDir, uuid, `${entry.hash}.png`);
+let file;
+
+if (entry.renderFile) {
+  file = path.join(capesDir, uuid, entry.renderFile);
+} else {
+  const legacyFile = path.join(capesDir, uuid, `${entry.hash}.png`);
+  const renderFile = path.join(capesDir, uuid, "renders", `${entry.hash}.png`);
+
+  try {
+    await fs.access(renderFile);
+    file = renderFile;
+  } catch {
+    file = legacyFile;
+  }
+}
 
   const png = await fs.readFile(file);
 
