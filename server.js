@@ -704,7 +704,7 @@ const response = await fetch(
 
 async function convertAiImageToCape(imageBuffer) {
   const capePng = await sharp(imageBuffer)
-    .resize(64, 32, {
+    .resize(360, 180, {
       fit: "cover",
       position: "center",
       kernel: sharp.kernel.nearest
