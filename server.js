@@ -738,6 +738,11 @@ function healthPayload() {
     uptime: Math.floor((Date.now() - startedAt) / 1000)
   };
 }
+function httpError(statusCode, message) {
+  return Object.assign(new Error(message), {
+    statusCode
+  });
+}
 
 function handleError(res, error) {
   const status = Number.isInteger(error?.statusCode)
