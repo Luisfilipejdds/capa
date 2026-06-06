@@ -2,6 +2,7 @@ import crypto from "node:crypto";
 import fs from "node:fs/promises";
 import path from "node:path";
 import express from "express";
+import sharp from "sharp";
 
 const app = express();
 
@@ -226,7 +227,52 @@ ${cards || "<p>Nenhuma capa visível encontrada.</p>"}
 app.get("/api/v1/health", (req, res) => {
   return res.json(healthPayload());
 });
+const aiCooldowns = new Map();
 
+app.post("/api/v1/ai/generate-cape", async (req, res) => {
+  try {
+    const body = req.body ?? {};
+
+    const uuid = normalizeUuid(body.uuid);
+    const username = sanitizeUsername(body.username);
+    const prompt = String(body.prompt ?? "").trim().slice(0, 180);
+    const style = String(body.style ?? "minecraft").trim().slice(0, 40);
+    const mainColor = String(body.mainColor ?? "").trim().slice(0, 30);
+    const quality = String(body.quality ?? "standard").trim().slice(0, 30);
+
+    if (!prompt) {
+      throw httpError(400, "missing_prompt");
+    }
+
+    const now = Date.now();
+    const lastUse = aiCooldowns.get(uuid) ?? 0;
+
+    if (now - lastUse < 30000) {
+      throw httpError(429, "ai_cooldown");
+    }
+
+    aiCooldowns.set(uuid, now);
+
+    const promptUsed = buildAiCapePrompt(prompt, style, mainColor, quality);
+    const generatedImage = await generateFluxImage(promptUsed);
+    const capePng = await convertAiImageToCape(generatedImage);
+
+    console.info(
+      `[AI] ${username || "unknown"} (${uuid.substring(0, 4)}****) prompt="${prompt}"`
+    );
+
+    return res.status(200).json({
+      ok: true,
+      capePngBase64: capePng.toString("base64"),
+      width: 64,
+      height: 32,
+      promptUsed,
+      createdAt: Date.now()
+    });
+  } catch (error) {
+    return handleError(res, error);
+  }
+});
 app.post("/api/v1/capes/:uuid", async (req, res) => {
   try {
     const uuid = normalizeUuid(req.params.uuid);
@@ -582,6 +628,96 @@ async function getStorageSizeMb() {
   await scan(capesDir);
 
   return (totalBytes / 1024 / 1024).toFixed(2);
+}
+function buildAiCapePrompt(prompt, style, mainColor, quality) {
+  const parts = [
+    "Minecraft cape texture",
+    "64x32 pixel art cape layout",
+    "cape back design",
+    "sharp pixels",
+    "clean centered composition",
+    "high contrast",
+    "no text",
+    "no watermark",
+    "no logo",
+    "game texture style",
+    prompt
+  ];
+
+  if (style) {
+    parts.push(`${style} style`);
+  }
+
+  if (mainColor) {
+    parts.push(`main color ${mainColor}`);
+  }
+
+  if (quality === "high") {
+    parts.push("high detail");
+  }
+
+  return parts.join(", ");
+}
+
+async function generateFluxImage(prompt) {
+  const token = process.env.HF_TOKEN;
+
+  if (!token) {
+    throw httpError(500, "missing_hf_token");
+  }
+
+  const response = await fetch(
+    "https://api-inference.huggingface.co/models/black-forest-labs/FLUX.1-schnell",
+    {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        inputs: prompt,
+        parameters: {
+          width: 512,
+          height: 512,
+          num_inference_steps: 4
+        }
+      })
+    }
+  );
+
+  const contentType = response.headers.get("content-type") ?? "";
+
+  if (!response.ok) {
+    const errorText = await response.text().catch(() => "");
+    console.error("[AI] Hugging Face error:", response.status, errorText);
+    throw httpError(502, "ai_provider_error");
+  }
+
+  if (contentType.includes("application/json")) {
+    const json = await response.json();
+    console.error("[AI] Unexpected JSON response:", json);
+    throw httpError(502, "ai_invalid_response");
+  }
+
+  return Buffer.from(await response.arrayBuffer());
+}
+
+async function convertAiImageToCape(imageBuffer) {
+  const capePng = await sharp(imageBuffer)
+    .resize(64, 32, {
+      fit: "cover",
+      position: "center",
+      kernel: sharp.kernel.nearest
+    })
+    .png({
+      compressionLevel: 9,
+      adaptiveFiltering: false
+    })
+    .toBuffer();
+
+  validatePng(capePng);
+
+  return capePng;
 }
 function statusPayload() {
   return {
