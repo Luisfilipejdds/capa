@@ -677,7 +677,7 @@ const response = await fetch(
       body: JSON.stringify({
         inputs: prompt,
         parameters: {
-          width: 512,
+          width: 1024,
           height: 512,
           num_inference_steps: 4
         }
