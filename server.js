@@ -294,19 +294,15 @@ app.post("/api/v1/capes/:uuid", async (req, res) => {
 
     if (!visible) {
       metadata[uuid] = {
+        ...(metadata[uuid] ?? {}),
         uuid,
         username,
-        hash: "",
         visible: false,
         updatedAt
       };
 
       await writeIndex(metadata);
-
-      console.info(
-        `[VISIBILITY] ${username || "unknown"} (${uuid.substring(0, 4)}****) invisible`
-      );
-
+      console.info(`[VISIBILITY] ${username || "unknown"} (${uuid.substring(0, 4)}****) invisible`);
       return res.status(200).json(toCapeResponse(metadata[uuid], ""));
     }
 
@@ -316,34 +312,58 @@ app.post("/api/v1/capes/:uuid", async (req, res) => {
       throw httpError(400, "invalid_hash");
     }
 
-    const png = decodeCape(body.capePngBase64);
-    const computedHash = crypto.createHash("sha256").update(png).digest("hex");
+    const renderPng = decodeCape(body.capePngBase64);
+    const computedHash = crypto.createHash("sha256").update(renderPng).digest("hex");
 
     if (computedHash !== hash) {
       throw httpError(400, "hash_mismatch");
     }
 
     const playerDir = path.join(capesDir, uuid);
-    await fs.mkdir(playerDir, { recursive: true });
-    await fs.writeFile(path.join(playerDir, `${hash}.png`), png);
+    const originalsDir = path.join(playerDir, "originals");
+    const rendersDir = path.join(playerDir, "renders");
+
+    await fs.mkdir(originalsDir, { recursive: true });
+    await fs.mkdir(rendersDir, { recursive: true });
+
+    await fs.writeFile(path.join(rendersDir, `${hash}.png`), renderPng);
+
+    let originalHash = "";
+    let originalFile = "";
+    let originalFormat = "";
+    let originalSize = 0;
+
+    if (typeof body.originalImageBase64 === "string" && body.originalImageBase64.length > 0) {
+      const original = decodeOriginalImage(body.originalImageBase64);
+      originalHash = crypto.createHash("sha256").update(original).digest("hex");
+      originalFormat = sanitizeOriginalFormat(body.originalFormat);
+      originalFile = `${originalHash}.${originalFormat}`;
+      originalSize = original.length;
+
+      await fs.writeFile(path.join(originalsDir, originalFile), original);
+    }
 
     await deleteOldPlayerCapes(uuid, hash);
-    
+
     metadata[uuid] = {
       uuid,
       username,
       hash,
+      renderHash: hash,
+      renderFile: `renders/${hash}.png`,
+      originalHash,
+      originalFile: originalFile ? `originals/${originalFile}` : "",
+      originalFormat,
+      originalSize,
       visible: true,
       updatedAt
     };
 
     await writeIndex(metadata);
 
-    console.info(
-      `[UPLOAD] ${username || "unknown"} (${uuid.substring(0, 4)}****) size=${png.length}`
-    );
+    console.info(`[UPLOAD] ${username || "unknown"} (${uuid.substring(0, 4)}****) render=${renderPng.length} original=${originalSize}`);
 
-    return res.status(200).json(toCapeResponse(metadata[uuid], png.toString("base64")));
+    return res.status(200).json(toCapeResponse(metadata[uuid], renderPng.toString("base64")));
   } catch (error) {
     return handleError(res, error);
   }
@@ -435,12 +455,18 @@ async function loadCape(uuid) {
     throw httpError(500, "corrupt_metadata");
   }
 
-  const file = path.join(capesDir, uuid, `${entry.hash}.png`);
+  const file = entry.renderFile
+    ? path.join(capesDir, uuid, entry.renderFile)
+    : path.join(capesDir, uuid, `${entry.hash}.png`);
+
   const png = await fs.readFile(file);
 
   validatePng(png);
 
-  const computedHash = crypto.createHash("sha256").update(png).digest("hex");
+  const computedHash = crypto
+    .createHash("sha256")
+    .update(png)
+    .digest("hex");
 
   if (computedHash !== entry.hash) {
     throw httpError(500, "stored_hash_mismatch");
@@ -509,11 +535,11 @@ async function countCapeFiles() {
   return total;
 }
 async function deleteOldPlayerCapes(uuid, activeHash) {
-  
   const playerDir = path.join(capesDir, uuid);
+  const rendersDir = path.join(playerDir, "renders");
 
   try {
-    const files = await fs.readdir(playerDir);
+    const files = await fs.readdir(rendersDir);
 
     for (const file of files) {
       if (!file.endsWith(".png")) {
@@ -523,7 +549,7 @@ async function deleteOldPlayerCapes(uuid, activeHash) {
       const hash = file.slice(0, -4);
 
       if (hash !== activeHash) {
-        await fs.rm(path.join(playerDir, file), {
+        await fs.rm(path.join(rendersDir, file), {
           force: true
         });
       }
@@ -534,7 +560,39 @@ async function deleteOldPlayerCapes(uuid, activeHash) {
     }
   }
 }
+function decodeOriginalImage(value) {
+  if (typeof value !== "string" || value.length === 0) {
+    throw httpError(400, "missing_originalImageBase64");
+  }
 
+  const maxOriginalBytes = Number.parseInt(process.env.MAX_ORIGINAL_SIZE ?? "15728640", 10);
+
+  if (value.length > Math.ceil(maxOriginalBytes * 1.4) + 16) {
+    throw httpError(413, "original_too_large");
+  }
+
+  if (value.length % 4 !== 0 || !base64Pattern.test(value)) {
+    throw httpError(400, "invalid_original_base64");
+  }
+
+  const buffer = Buffer.from(value, "base64");
+
+  if (buffer.length <= 0 || buffer.length > maxOriginalBytes) {
+    throw httpError(413, "original_too_large");
+  }
+
+  return buffer;
+}
+
+function sanitizeOriginalFormat(value) {
+  const format = String(value ?? "png").toLowerCase().replace(/[^a-z0-9]/g, "");
+
+  if (["png", "jpg", "jpeg", "webp", "gif"].includes(format)) {
+    return format === "jpeg" ? "jpg" : format;
+  }
+
+  return "png";
+}
 function decodeCape(value) {
   if (typeof value !== "string" || value.length === 0) {
     throw httpError(400, "missing_capePngBase64");
