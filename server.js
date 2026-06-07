@@ -12,7 +12,8 @@ const capesDir = path.join(dataDir, "capes");
 const indexFile = path.join(dataDir, "index.json");
 
 const maxCapeBytes = Number.parseInt(process.env.MAX_CAPE_SIZE ?? "1048576", 10);
-const jsonLimitBytes = Math.ceil(maxCapeBytes * 1.5) + 64 * 1024;
+const maxOriginalBytes = Number.parseInt(process.env.MAX_ORIGINAL_SIZE ?? "31457280", 10);
+const jsonLimitBytes = Math.ceil((maxCapeBytes + maxOriginalBytes) * 1.5) + 64 * 1024;
 
 const uuidPattern =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -97,6 +98,36 @@ app.get("/api/v1", (req, res) => {
 app.get("/health", (req, res) => {
   return res.json(healthPayload());
 });
+app.get("/original-image/:uuid", async (req, res) => {
+  try {
+    const uuid = normalizeUuid(req.params.uuid);
+    const metadata = await readIndex();
+    const entry = metadata[uuid];
+
+    if (!entry || !entry.visible || !entry.originalFile) {
+      return res.status(404).json({ ok: false, error: "original_not_found" });
+    }
+
+    const file = path.join(capesDir, uuid, entry.originalFile);
+    const original = await fs.readFile(file);
+    const format = String(entry.originalFormat || "png").toLowerCase();
+
+    const contentTypes = {
+      png: "image/png",
+      jpg: "image/jpeg",
+      jpeg: "image/jpeg",
+      webp: "image/webp",
+      gif: "image/gif"
+    };
+
+    res.setHeader("Content-Type", contentTypes[format] || "application/octet-stream");
+    res.setHeader("Cache-Control", "public, max-age=60");
+
+    return res.status(200).send(original);
+  } catch (error) {
+    return handleError(res, error);
+  }
+});
 app.get("/cape-image/:uuid.png", async (req, res) => {
   try {
     const uuid = normalizeUuid(req.params.uuid);
@@ -156,14 +187,17 @@ const cards = capes.map(entry => {
   const updated = entry.updatedAt
     ? new Date(entry.updatedAt).toLocaleString("pt-BR")
     : "Desconhecido";
-
+const originalInfo = entry.originalFile
+  ? `${String(entry.originalFormat || "unknown").toUpperCase()} • ${entry.originalSize || 0} bytes`
+  : "Sem original salvo";
   return `
     <div class="cape-card">
-      <a href="/cape-image/${entry.uuid}.png" target="_blank">
-        <img src="/cape-image/${entry.uuid}.png" alt="Cape ${escapeHtml(entry.username || entry.uuid)}">
-      </a>
+<a href="${entry.originalFile ? `/original-image/${entry.uuid}` : `/cape-image/${entry.uuid}.png`}" target="_blank">
+  <img src="${entry.originalFile ? `/original-image/${entry.uuid}` : `/cape-image/${entry.uuid}.png`}" alt="Cape ${escapeHtml(entry.username || entry.uuid)}">
+</a>
       <h2>${escapeHtml(entry.username || "unknown")}</h2>
       <p class="muted">Atualizada: ${escapeHtml(updated)}</p>
+      <p class="muted">Original: ${escapeHtml(originalInfo)}</p>
       <p class="hash">Hash: ${escapeHtml(String(entry.hash || "").slice(0, 12))}...</p>
     </div>
   `;
@@ -505,18 +539,24 @@ async function loadCape(uuid) {
 
 let file;
 
-if (entry.renderFile) {
-  file = path.join(capesDir, uuid, entry.renderFile);
-} else {
-  const legacyFile = path.join(capesDir, uuid, `${entry.hash}.png`);
-  const renderFile = path.join(capesDir, uuid, "renders", `${entry.hash}.png`);
+const possibleFiles = [
+  entry.renderFile ? path.join(capesDir, uuid, entry.renderFile) : null,
+  path.join(capesDir, uuid, "renders", `${entry.hash}.png`),
+  path.join(capesDir, uuid, `${entry.hash}.png`)
+].filter(Boolean);
 
+for (const possibleFile of possibleFiles) {
   try {
-    await fs.access(renderFile);
-    file = renderFile;
+    await fs.access(possibleFile);
+    file = possibleFile;
+    break;
   } catch {
-    file = legacyFile;
+    // tenta o próximo
   }
+}
+
+if (!file) {
+  throw httpError(404, "cape_file_not_found");
 }
 
   const png = await fs.readFile(file);
@@ -625,9 +665,9 @@ function decodeOriginalImage(value) {
     throw httpError(400, "missing_originalImageBase64");
   }
 
-  const maxOriginalBytes = Number.parseInt(process.env.MAX_ORIGINAL_SIZE ?? "15728640", 10);
+  const limit = Number.parseInt(process.env.MAX_ORIGINAL_SIZE ?? "31457280", 10);
 
-  if (value.length > Math.ceil(maxOriginalBytes * 1.4) + 16) {
+  if (value.length > Math.ceil(limit * 1.4) + 16) {
     throw httpError(413, "original_too_large");
   }
 
@@ -637,7 +677,7 @@ function decodeOriginalImage(value) {
 
   const buffer = Buffer.from(value, "base64");
 
-  if (buffer.length <= 0 || buffer.length > maxOriginalBytes) {
+  if (buffer.length <= 0 || buffer.length > limit) {
     throw httpError(413, "original_too_large");
   }
 
