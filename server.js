@@ -412,7 +412,32 @@ app.get("/api/v1/capes/bulk", async (req, res) => {
     return handleError(res, error);
   }
 });
+app.get("/api/v1/capes/:uuid/original", async (req, res) => {
+  try {
+    const uuid = normalizeUuid(req.params.uuid);
+    const metadata = await readIndex();
+    const entry = metadata[uuid];
 
+    if (!entry || !entry.visible || !entry.originalFile) {
+      return res.status(404).json({ ok: false, error: "original_not_found" });
+    }
+
+    const file = path.join(capesDir, uuid, entry.originalFile);
+    const original = await fs.readFile(file);
+
+    return res.status(200).json({
+      ok: true,
+      uuid: entry.uuid,
+      username: entry.username,
+      originalImageBase64: original.toString("base64"),
+      originalFormat: entry.originalFormat || "png",
+      originalSize: entry.originalSize || original.length,
+      updatedAt: entry.updatedAt || 0
+    });
+  } catch (error) {
+    return handleError(res, error);
+  }
+});
 app.get("/api/v1/capes/:uuid", async (req, res) => {
   try {
     const rawUuid = String(req.params.uuid ?? "").toLowerCase();
