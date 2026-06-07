@@ -109,18 +109,27 @@ app.get("/cape-image/:uuid.png", async (req, res) => {
 
 let file;
 
-if (entry.renderFile) {
-  file = path.join(capesDir, uuid, entry.renderFile);
-} else {
-  const legacyFile = path.join(capesDir, uuid, `${entry.hash}.png`);
-  const renderFile = path.join(capesDir, uuid, "renders", `${entry.hash}.png`);
+const possibleFiles = [
+  entry.renderFile ? path.join(capesDir, uuid, entry.renderFile) : null,
+  path.join(capesDir, uuid, "renders", `${entry.hash}.png`),
+  path.join(capesDir, uuid, `${entry.hash}.png`)
+].filter(Boolean);
 
+for (const possibleFile of possibleFiles) {
   try {
-    await fs.access(renderFile);
-    file = renderFile;
+    await fs.access(possibleFile);
+    file = possibleFile;
+    break;
   } catch {
-    file = legacyFile;
+    // tenta o próximo caminho
   }
+}
+
+if (!file) {
+  return res.status(404).json({
+    ok: false,
+    error: "cape_file_not_found"
+  });
 }
     const png = await fs.readFile(file);
 
