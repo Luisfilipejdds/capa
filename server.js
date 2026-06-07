@@ -455,6 +455,30 @@ app.get("/api/v1/capes/bulk", async (req, res) => {
     return handleError(res, error);
   }
 });
+app.get("/api/v1/capes/by-name/:username", async (req, res) => {
+  try {
+    const username = sanitizeUsername(req.params.username).toLowerCase();
+    const metadata = await readIndex();
+
+    const entry = Object.values(metadata).find(value =>
+      value?.username &&
+      String(value.username).toLowerCase() === username &&
+      value.visible === true
+    );
+
+    if (!entry) {
+      return res.status(404).json({ ok: false, error: "not_found" });
+    }
+
+    return res.status(200).json({
+      ok: true,
+      uuid: entry.uuid,
+      username: entry.username
+    });
+  } catch (error) {
+    return handleError(res, error);
+  }
+});
 app.get("/api/v1/capes/:uuid/original", async (req, res) => {
   try {
     const uuid = normalizeUuid(req.params.uuid);
