@@ -400,7 +400,11 @@ app.post("/api/v1/capes/:uuid", async (req, res) => {
     const metadata = await readIndex();
 
     if (metadata[uuid]?.banned) {
-      throw httpError(403, "banned");
+      throw httpError(
+        403,
+        "banned",
+        "Sua capa foi removida do Cloud Sync por um moderador. Voce ainda pode usar qualquer capa localmente (so voce vai ve-la), mas ela nao vai sincronizar nem aparecer para outros jogadores. Para pedir revisao, chame @luisfilipejdds no Discord."
+      );
     }
 
     if (!visible) {
@@ -1048,9 +1052,10 @@ function healthPayload() {
     uptime: Math.floor((Date.now() - startedAt) / 1000)
   };
 }
-function httpError(statusCode, message) {
+function httpError(statusCode, message, publicMessage) {
   return Object.assign(new Error(message), {
-    statusCode
+    statusCode,
+    publicMessage
   });
 }
 
@@ -1065,8 +1070,14 @@ function handleError(res, error) {
     console.error(error?.stack);
   }
 
-  return res.status(status).json({
+  const payload = {
     ok: false,
     error: status >= 500 ? "internal_error" : error?.message ?? "internal_error"
-  });
+  };
+
+  if (status < 500 && error?.publicMessage) {
+    payload.message = error.publicMessage;
+  }
+
+  return res.status(status).json(payload);
 }
