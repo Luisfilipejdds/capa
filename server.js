@@ -199,7 +199,7 @@ const originalInfo = entry.originalFile
   ? `${String(entry.originalFormat || "unknown").toUpperCase()} • ${entry.originalSize || 0} bytes`
   : "Sem original salvo";
   const banButton = isAdmin
-    ? `<button class="ban-btn" onclick="banCape(${JSON.stringify(entry.uuid)}, ${JSON.stringify(entry.username || entry.uuid)})">Banir capa</button>`
+    ? `<button class="ban-btn" data-uuid="${escapeHtml(entry.uuid)}" data-name="${escapeHtml(entry.username || entry.uuid)}">Banir capa</button>`
     : "";
   return `
     <div class="cape-card">
@@ -318,6 +318,11 @@ async function banCape(uuid, name) {
     alert("Erro ao banir: " + error.message);
   }
 }
+document.querySelectorAll(".ban-btn").forEach(function (btn) {
+  btn.addEventListener("click", function () {
+    banCape(btn.dataset.uuid, btn.dataset.name);
+  });
+});
 </script>` : ""}
 </body>
 </html>
