@@ -1,10 +1,15 @@
 import crypto from "node:crypto";
 import fs from "node:fs/promises";
+import { readFileSync } from "node:fs";
 import path from "node:path";
 import express from "express";
 import sharp from "sharp";
 
 const app = express();
+
+const packageVersion = JSON.parse(
+  readFileSync(new URL("./package.json", import.meta.url), "utf8")
+).version;
 
 const port = Number.parseInt(process.env.PORT ?? "8787", 10);
 const dataDir = path.resolve(process.env.DATA_DIR ?? "/opt/render/project/data");
@@ -78,7 +83,7 @@ color:#31b7ff;
 <div class="card">
 <h1>AdaptiveCaps Relay</h1>
 <p>Status: Online</p>
-<p>Version: 1.0.0</p>
+<p>Version: ${packageVersion}</p>
 <p>Uptime: ${Math.floor((Date.now() - startedAt) / 1000)} segundos</p>
 <p>Registered Players: ${totalPlayers}</p>
 <p>Visible Capes: ${visibleCapes}</p>
@@ -400,7 +405,7 @@ app.post("/api/v1/capes/:uuid", async (req, res) => {
       await fs.writeFile(path.join(originalsDir, originalFile), original);
     }
 
-    await deleteOldPlayerCapes(uuid, hash);
+    await deleteOldPlayerCapes(uuid, hash, originalFile);
 
     metadata[uuid] = {
       uuid,
@@ -658,22 +663,22 @@ async function countCapeFiles() {
 
   return total;
 }
-async function deleteOldPlayerCapes(uuid, activeHash) {
+async function deleteOldPlayerCapes(uuid, activeHash, activeOriginalFile) {
   const playerDir = path.join(capesDir, uuid);
   const rendersDir = path.join(playerDir, "renders");
+  const originalsDir = path.join(playerDir, "originals");
 
+  await cleanupDir(rendersDir, file => file.endsWith(".png") && file.slice(0, -4) !== activeHash);
+  await cleanupDir(originalsDir, file => file !== activeOriginalFile);
+}
+
+async function cleanupDir(dir, shouldDelete) {
   try {
-    const files = await fs.readdir(rendersDir);
+    const files = await fs.readdir(dir);
 
     for (const file of files) {
-      if (!file.endsWith(".png")) {
-        continue;
-      }
-
-      const hash = file.slice(0, -4);
-
-      if (hash !== activeHash) {
-        await fs.rm(path.join(rendersDir, file), {
+      if (shouldDelete(file)) {
+        await fs.rm(path.join(dir, file), {
           force: true
         });
       }
@@ -905,7 +910,7 @@ function statusPayload() {
   return {
     ok: true,
     service: "AdaptiveCapes Relay",
-    version: "1.0.0",
+    version: packageVersion,
     status: "online"
   };
 }
@@ -915,7 +920,7 @@ function healthPayload() {
     ok: true,
     status: "ok",
     service: "adaptivecapes-relay",
-    version: "1.0.0",
+    version: packageVersion,
     timestamp: new Date().toISOString(),
     uptime: Math.floor((Date.now() - startedAt) / 1000)
   };
