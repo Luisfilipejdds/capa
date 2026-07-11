@@ -565,6 +565,25 @@ app.get("/api/v1/capes/bulk", async (req, res) => {
     return handleError(res, error);
   }
 });
+app.get("/api/v1/capes/usernames", async (req, res) => {
+  try {
+    const metadata = await readIndex();
+
+    const usernames = Array.from(
+      new Set(
+        Object.values(metadata)
+          .filter(entry => entry?.visible === true && entry?.username)
+          .map(entry => String(entry.username))
+      )
+    ).sort((a, b) => a.localeCompare(b, "pt-BR", { sensitivity: "base" }));
+
+    const limit = Math.min(200, Math.max(1, Number.parseInt(req.query.limit, 10) || 50));
+
+    return res.status(200).json({ ok: true, usernames: usernames.slice(0, limit) });
+  } catch (error) {
+    return handleError(res, error);
+  }
+});
 app.get("/api/v1/capes/by-name/:username", async (req, res) => {
   try {
     const username = sanitizeUsername(req.params.username).toLowerCase();
