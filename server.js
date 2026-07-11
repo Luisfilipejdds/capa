@@ -11,6 +11,8 @@ const packageVersion = JSON.parse(
   readFileSync(new URL("./package.json", import.meta.url), "utf8")
 ).version;
 
+const adminToken = process.env.ADMIN_TOKEN ?? "";
+
 const port = Number.parseInt(process.env.PORT ?? "8787", 10);
 const dataDir = path.resolve(process.env.DATA_DIR ?? "/opt/render/project/data");
 const capesDir = path.join(dataDir, "capes");
@@ -183,6 +185,7 @@ if (!file) {
 app.get("/capes", async (req, res) => {
   try {
     const metadata = await readIndex();
+    const isAdmin = Boolean(adminToken) && req.query.admin === adminToken;
 
     const capes = Object.values(metadata)
       .filter(entry => entry?.visible === true && entry?.hash)
@@ -195,6 +198,9 @@ const cards = capes.map(entry => {
 const originalInfo = entry.originalFile
   ? `${String(entry.originalFormat || "unknown").toUpperCase()} • ${entry.originalSize || 0} bytes`
   : "Sem original salvo";
+  const banButton = isAdmin
+    ? `<button class="ban-btn" onclick="banCape(${JSON.stringify(entry.uuid)}, ${JSON.stringify(entry.username || entry.uuid)})">Banir capa</button>`
+    : "";
   return `
     <div class="cape-card">
 <a href="${entry.originalFile ? `/original-image/${entry.uuid}` : `/cape-image/${entry.uuid}.png`}" target="_blank">
@@ -204,6 +210,7 @@ const originalInfo = entry.originalFile
       <p class="muted">Atualizada: ${escapeHtml(updated)}</p>
       <p class="muted">Original: ${escapeHtml(originalInfo)}</p>
       <p class="hash">Hash: ${escapeHtml(String(entry.hash || "").slice(0, 12))}...</p>
+      ${banButton}
     </div>
   `;
 }).join("");
@@ -272,6 +279,21 @@ display:inline-block;
 transform:scale(1.08);
 transition:.15s;
 }
+
+.ban-btn{
+margin-top:10px;
+background:#c0392b;
+color:white;
+border:none;
+padding:8px 14px;
+border-radius:8px;
+font-size:12px;
+cursor:pointer;
+}
+
+.ban-btn:hover{
+background:#e74c3c;
+}
 </style>
 </head>
 <body>
@@ -279,6 +301,24 @@ transition:.15s;
 <div class="grid">
 ${cards || "<p>Nenhuma capa visível encontrada.</p>"}
 </div>
+${isAdmin ? `<script>
+const ADMIN_TOKEN = ${JSON.stringify(adminToken)};
+async function banCape(uuid, name) {
+  if (!confirm("Banir a capa de " + name + "? Isso apaga os arquivos do servidor e bloqueia novos envios ate desbanir.")) {
+    return;
+  }
+  try {
+    const response = await fetch("/api/v1/admin/ban/" + uuid + "?admin=" + encodeURIComponent(ADMIN_TOKEN), { method: "POST" });
+    if (!response.ok) {
+      alert("Falha ao banir (status " + response.status + ").");
+      return;
+    }
+    location.reload();
+  } catch (error) {
+    alert("Erro ao banir: " + error.message);
+  }
+}
+</script>` : ""}
 </body>
 </html>
     `);
@@ -353,6 +393,10 @@ app.post("/api/v1/capes/:uuid", async (req, res) => {
         : Date.now();
 
     const metadata = await readIndex();
+
+    if (metadata[uuid]?.banned) {
+      throw httpError(403, "banned");
+    }
 
     if (!visible) {
       metadata[uuid] = {
@@ -430,7 +474,59 @@ app.post("/api/v1/capes/:uuid", async (req, res) => {
     return handleError(res, error);
   }
 });
-    
+
+app.post("/api/v1/admin/ban/:uuid", async (req, res) => {
+  try {
+    requireAdmin(req);
+    const uuid = normalizeUuid(req.params.uuid);
+    const metadata = await readIndex();
+    const existing = metadata[uuid] ?? {};
+
+    await purgePlayerFiles(uuid);
+
+    metadata[uuid] = {
+      uuid,
+      username: existing.username ?? "",
+      visible: false,
+      banned: true,
+      bannedAt: Date.now(),
+      hash: "",
+      renderFile: "",
+      originalHash: "",
+      originalFile: "",
+      originalFormat: "",
+      originalSize: 0,
+      updatedAt: Date.now()
+    };
+
+    await writeIndex(metadata);
+    console.info(`[BAN] ${metadata[uuid].username || "unknown"} (${uuid.substring(0, 4)}****) banido pelo admin`);
+    return res.status(200).json({ ok: true, uuid, banned: true });
+  } catch (error) {
+    return handleError(res, error);
+  }
+});
+
+app.post("/api/v1/admin/unban/:uuid", async (req, res) => {
+  try {
+    requireAdmin(req);
+    const uuid = normalizeUuid(req.params.uuid);
+    const metadata = await readIndex();
+    const entry = metadata[uuid];
+
+    if (!entry) {
+      return res.status(404).json({ ok: false, error: "not_found" });
+    }
+
+    metadata[uuid] = { ...entry, banned: false };
+    await writeIndex(metadata);
+    console.info(`[UNBAN] ${entry.username || "unknown"} (${uuid.substring(0, 4)}****) desbanido pelo admin`);
+    return res.status(200).json({ ok: true, uuid, banned: false });
+  } catch (error) {
+    return handleError(res, error);
+  }
+});
+
 app.get("/api/v1/capes/bulk", async (req, res) => {
   try {
     const raw = String(req.query.uuids ?? "").trim();
@@ -687,6 +783,28 @@ async function cleanupDir(dir, shouldDelete) {
     if (error.code !== "ENOENT") {
       throw error;
     }
+  }
+}
+
+async function purgePlayerFiles(uuid) {
+  const playerDir = path.join(capesDir, uuid);
+  await fs.rm(playerDir, { recursive: true, force: true });
+}
+
+function requireAdmin(req) {
+  if (!adminToken) {
+    throw httpError(503, "admin_disabled");
+  }
+
+  const provided = String(req.get("x-admin-token") ?? req.query.admin ?? "");
+  const providedBuffer = Buffer.from(provided);
+  const tokenBuffer = Buffer.from(adminToken);
+
+  if (
+    providedBuffer.length !== tokenBuffer.length ||
+    !crypto.timingSafeEqual(providedBuffer, tokenBuffer)
+  ) {
+    throw httpError(403, "forbidden");
   }
 }
 function decodeOriginalImage(value) {
