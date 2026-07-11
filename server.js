@@ -361,7 +361,7 @@ app.post("/api/v1/ai/generate-cape", async (req, res) => {
     aiCooldowns.set(uuid, now);
 
     const promptUsed = buildAiCapePrompt(prompt, style, mainColor, quality);
-    const generatedImage = await generateFluxImage(promptUsed);
+    const generatedImage = await generateFluxImage(promptUsed, quality);
     const capePng = await convertAiImageToCape(generatedImage);
 
     console.info(
@@ -992,55 +992,105 @@ function buildAiCapePrompt(prompt, style, mainColor, quality) {
   return parts.join(", ");
 }
 
-async function generateFluxImage(prompt) {
+// FLUX.1-schnell e destilado para poucos passos (1-4); mais steps nao melhora a
+// qualidade de forma perceptivel, entao a diferenca real entre "standard" e "high"
+// vem da resolucao gerada (mais resolucao = menos ruido ao reduzir para o tamanho
+// da capa depois).
+const AI_QUALITY_DIMENSIONS = {
+  standard: { width: 768, height: 384 },
+  high: { width: 1152, height: 576 }
+};
+
+async function generateFluxImage(prompt, quality) {
   const token = process.env.HF_TOKEN;
 
   if (!token) {
     throw httpError(500, "missing_hf_token");
   }
 
-const response = await fetch(
-  "https://router.huggingface.co/hf-inference/models/black-forest-labs/FLUX.1-schnell",
-    {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${token}`,
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify({
-        inputs: prompt,
-        parameters: {
-          width: 1024,
-          height: 512,
-          num_inference_steps: 4
+  const dimensions = AI_QUALITY_DIMENSIONS[quality] ?? AI_QUALITY_DIMENSIONS.standard;
+
+  for (let attempt = 1; attempt <= 2; attempt++) {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 45000);
+
+    let response;
+    try {
+      response = await fetch(
+        "https://router.huggingface.co/hf-inference/models/black-forest-labs/FLUX.1-schnell",
+        {
+          method: "POST",
+          signal: controller.signal,
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify({
+            inputs: prompt,
+            parameters: {
+              width: dimensions.width,
+              height: dimensions.height,
+              num_inference_steps: 4
+            }
+          })
         }
-      })
+      );
+    } catch (error) {
+      if (error.name === "AbortError") {
+        throw httpError(504, "ai_timeout", "A geracao demorou demais e foi cancelada. Tente novamente.");
+      }
+      throw httpError(502, "ai_provider_error");
+    } finally {
+      clearTimeout(timeout);
     }
-  );
 
-  const contentType = response.headers.get("content-type") ?? "";
+    const contentType = response.headers.get("content-type") ?? "";
 
-  if (!response.ok) {
-    const errorText = await response.text().catch(() => "");
-    console.error("[AI] Hugging Face error:", response.status, errorText);
-    throw httpError(502, "ai_provider_error");
+    if (!response.ok) {
+      // A API da Hugging Face retorna 503 com "estimated_time" enquanto um modelo
+      // gratuito "acorda" de um cold start; vale a pena esperar e tentar uma vez.
+      if (response.status === 503 && attempt === 1) {
+        let waitSeconds = 8;
+        try {
+          const errorJson = await response.json();
+          if (typeof errorJson?.estimated_time === "number") {
+            waitSeconds = Math.min(20, Math.max(3, Math.ceil(errorJson.estimated_time)));
+          }
+        } catch {
+          // corpo sem JSON valido — usa o tempo de espera padrao
+        }
+        console.info(`[AI] Modelo carregando na Hugging Face, aguardando ${waitSeconds}s antes de tentar de novo.`);
+        await new Promise(resolve => setTimeout(resolve, waitSeconds * 1000));
+        continue;
+      }
+
+      const errorText = await response.text().catch(() => "");
+      console.error("[AI] Hugging Face error:", response.status, errorText);
+      throw httpError(502, "ai_provider_error");
+    }
+
+    if (contentType.includes("application/json")) {
+      const json = await response.json();
+      console.error("[AI] Unexpected JSON response:", json);
+      throw httpError(502, "ai_invalid_response");
+    }
+
+    return Buffer.from(await response.arrayBuffer());
   }
 
-  if (contentType.includes("application/json")) {
-    const json = await response.json();
-    console.error("[AI] Unexpected JSON response:", json);
-    throw httpError(502, "ai_invalid_response");
-  }
-
-  return Buffer.from(await response.arrayBuffer());
+  throw httpError(502, "ai_provider_error");
 }
 
 async function convertAiImageToCape(imageBuffer) {
+  // Um passo de reducao suave (lanczos3) ate um multiplo limpo de 64x32 preserva
+  // formas/cores com menos ruido do que ir direto pro tamanho final; o cliente
+  // ainda faz um ultimo passo com vizinho-mais-proximo para o "look" de pixel art
+  // nitido em 64x32 (ver CapeTextureManager.resize()).
   const capePng = await sharp(imageBuffer)
-    .resize(360, 180, {
+    .resize(256, 128, {
       fit: "cover",
       position: "center",
-      kernel: sharp.kernel.nearest
+      kernel: sharp.kernel.lanczos3
     })
     .png({
       compressionLevel: 9,
