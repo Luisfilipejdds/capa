@@ -712,12 +712,13 @@ app.post("/api/v1/library/:uuid", async (req, res) => {
 
     const updatedAt =
       Number.isSafeInteger(body.updatedAt) && body.updatedAt > 0 ? body.updatedAt : Date.now();
+    const username = sanitizeUsername(body.username);
 
     const index = await readLibraryIndex();
-    index[uuid] = { uuid, updatedAt, slots: storedSlots };
+    index[uuid] = { uuid, username, updatedAt, slots: storedSlots };
     await writeLibraryIndex(index);
 
-    console.info(`[LIBRARY] upload uuid=${uuid.substring(0, 4)}**** slots=${storedSlots.length}`);
+    console.info(`[LIBRARY] upload ${username || "unknown"} (${uuid.substring(0, 4)}****) slots=${storedSlots.length}`);
 
     return res.status(200).json({ ok: true, uuid, updatedAt, slotCount: storedSlots.length });
   } catch (error) {
