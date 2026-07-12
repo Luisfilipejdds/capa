@@ -335,6 +335,194 @@ document.querySelectorAll(".ban-btn").forEach(function (btn) {
     return handleError(res, error);
   }
 });
+app.get("/api/v1/admin/banned", async (req, res) => {
+  try {
+    requireAdmin(req);
+    const metadata = await readIndex();
+    const banned = Object.values(metadata)
+      .filter(entry => entry?.banned === true)
+      .sort((a, b) => Number(b.bannedAt ?? 0) - Number(a.bannedAt ?? 0))
+      .map(entry => ({
+        uuid: String(entry.uuid ?? ""),
+        username: String(entry.username ?? ""),
+        bannedAt: Number.isSafeInteger(entry.bannedAt) ? entry.bannedAt : 0
+      }));
+
+    return res.status(200).json({ ok: true, banned });
+  } catch (error) {
+    return handleError(res, error);
+  }
+});
+app.get("/banned", (req, res) => {
+  // O token de admin NUNCA e embutido nesta pagina nem passado por query string
+  // (ficaria no historico do navegador e nos logs de acesso). O proprio admin
+  // digita o token no navegador via prompt(); ele so existe em memoria do lado
+  // do cliente e e enviado apenas como header em cada chamada.
+  return res.type("html").send(`
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>AdaptiveCaps - Banidos</title>
+<style>
+body{
+background:#0f1720;
+color:white;
+font-family:Arial,sans-serif;
+margin:0;
+padding:30px;
+}
+h1{
+color:#31b7ff;
+}
+.grid{
+display:grid;
+grid-template-columns:repeat(auto-fill,minmax(220px,1fr));
+gap:20px;
+}
+.player-card{
+background:#182331;
+padding:18px;
+border-radius:14px;
+text-align:center;
+box-shadow:0 0 20px rgba(0,0,0,.25);
+}
+.player-card h2{
+font-size:18px;
+margin:0 0 8px;
+}
+.muted{
+color:#aeb9c8;
+font-size:12px;
+}
+.hash{
+font-size:11px;
+color:#718096;
+word-break:break-all;
+margin:4px 0;
+}
+.unban-btn{
+margin-top:10px;
+background:#1f9d55;
+color:white;
+border:none;
+padding:8px 14px;
+border-radius:8px;
+font-size:12px;
+cursor:pointer;
+}
+.unban-btn:hover{
+background:#27ae60;
+}
+.unban-btn:disabled{
+background:#4a5568;
+cursor:default;
+}
+.empty, .msg{
+color:#aeb9c8;
+}
+</style>
+</head>
+<body>
+<h1 id="title">AdaptiveCaps - Jogadores banidos</h1>
+<div id="content" class="grid"><p class="msg">Carregando...</p></div>
+<script>
+let adminToken = "";
+
+function escapeHtml(value) {
+  const div = document.createElement("div");
+  div.textContent = String(value ?? "");
+  return div.innerHTML;
+}
+
+async function loadBanned() {
+  adminToken = window.prompt("Token de admin:") || "";
+  if (!adminToken) {
+    document.getElementById("content").innerHTML = '<p class="msg">Token nao informado.</p>';
+    return;
+  }
+
+  const content = document.getElementById("content");
+  content.innerHTML = '<p class="msg">Carregando...</p>';
+
+  try {
+    const response = await fetch("/api/v1/admin/banned", { headers: { "x-admin-token": adminToken } });
+    if (response.status === 403) {
+      content.innerHTML = '<p class="msg">Token invalido.</p>';
+      adminToken = "";
+      return;
+    }
+    if (!response.ok) {
+      content.innerHTML = '<p class="msg">Falha ao carregar (status ' + response.status + ').</p>';
+      return;
+    }
+
+    const data = await response.json();
+    renderBanned(data.banned || []);
+  } catch (error) {
+    content.innerHTML = '<p class="msg">Erro ao carregar: ' + escapeHtml(error.message) + '</p>';
+  }
+}
+
+function renderBanned(banned) {
+  document.getElementById("title").textContent = "AdaptiveCaps - Jogadores banidos (" + banned.length + ")";
+  const content = document.getElementById("content");
+
+  if (banned.length === 0) {
+    content.innerHTML = '<p class="empty">Nenhum jogador banido no momento.</p>';
+    return;
+  }
+
+  content.innerHTML = banned.map(function (entry) {
+    const bannedAt = entry.bannedAt ? new Date(entry.bannedAt).toLocaleString("pt-BR") : "Desconhecido";
+    return (
+      '<div class="player-card">' +
+      "<h2>" + escapeHtml(entry.username || "unknown") + "</h2>" +
+      '<p class="hash">' + escapeHtml(entry.uuid) + "</p>" +
+      '<p class="muted">Banido em: ' + escapeHtml(bannedAt) + "</p>" +
+      '<button class="unban-btn" data-uuid="' + escapeHtml(entry.uuid) + '" data-name="' + escapeHtml(entry.username || entry.uuid) + '">Desbanir</button>' +
+      "</div>"
+    );
+  }).join("");
+
+  content.querySelectorAll(".unban-btn").forEach(function (btn) {
+    btn.addEventListener("click", function () {
+      unbanPlayer(btn.dataset.uuid, btn.dataset.name, btn);
+    });
+  });
+}
+
+async function unbanPlayer(uuid, name, btn) {
+  if (!window.confirm("Desbanir " + name + "?")) {
+    return;
+  }
+  btn.disabled = true;
+  btn.textContent = "Desbanindo...";
+  try {
+    const response = await fetch("/api/v1/admin/unban/" + uuid, {
+      method: "POST",
+      headers: { "x-admin-token": adminToken }
+    });
+    if (!response.ok) {
+      alert("Falha ao desbanir (status " + response.status + ").");
+      btn.disabled = false;
+      btn.textContent = "Desbanir";
+      return;
+    }
+    loadBanned();
+  } catch (error) {
+    alert("Erro ao desbanir: " + error.message);
+    btn.disabled = false;
+    btn.textContent = "Desbanir";
+  }
+}
+
+loadBanned();
+</script>
+</body>
+</html>
+    `);
+});
 app.get("/api/v1/health", (req, res) => {
   return res.json(healthPayload());
 });
