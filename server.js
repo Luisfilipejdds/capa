@@ -464,6 +464,10 @@ app.post("/api/v1/capes/:uuid", async (req, res) => {
 
     await deleteOldPlayerCapes(uuid, hash, originalFile);
 
+    const animated = Boolean(body.animated) || originalFormat === "gif";
+    const frameCount = Number.isSafeInteger(body.frameCount) && body.frameCount > 0 ? body.frameCount : 0;
+    const fps = Number.isSafeInteger(body.fps) && body.fps > 0 ? body.fps : 0;
+
     metadata[uuid] = {
       uuid,
       username,
@@ -474,6 +478,9 @@ app.post("/api/v1/capes/:uuid", async (req, res) => {
       originalFile: originalFile ? `originals/${originalFile}` : "",
       originalFormat,
       originalSize,
+      animated,
+      frameCount,
+      fps,
       visible: true,
       updatedAt
     };
@@ -1095,6 +1102,9 @@ function toCapeResponse(entry, capePngBase64) {
     hash: String(entry.hash ?? ""),
     visible: Boolean(entry.visible),
     capePngBase64,
+    animated: Boolean(entry.animated) || entry.originalFormat === "gif",
+    frameCount: Number.isSafeInteger(entry.frameCount) ? entry.frameCount : 0,
+    fps: Number.isSafeInteger(entry.fps) ? entry.fps : 0,
     updatedAt: Number.isSafeInteger(entry.updatedAt) ? entry.updatedAt : 0
   };
 }
