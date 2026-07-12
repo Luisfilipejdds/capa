@@ -186,40 +186,33 @@ if (!file) {
   }
 });
 
-app.get("/capes", async (req, res) => {
+app.get("/api/v1/admin/capes", async (req, res) => {
   try {
+    requireAdmin(req);
     const metadata = await readIndex();
-    const isAdmin = Boolean(adminToken) && req.query.admin === adminToken;
 
     const capes = Object.values(metadata)
       .filter(entry => entry?.visible === true && entry?.hash)
-      .sort((a, b) => Number(b.updatedAt ?? 0) - Number(a.updatedAt ?? 0));
+      .sort((a, b) => Number(b.updatedAt ?? 0) - Number(a.updatedAt ?? 0))
+      .map(entry => ({
+        uuid: String(entry.uuid ?? ""),
+        username: String(entry.username ?? ""),
+        updatedAt: Number.isSafeInteger(entry.updatedAt) ? entry.updatedAt : 0,
+        hash: String(entry.hash ?? ""),
+        hasOriginal: Boolean(entry.originalFile),
+        originalFormat: String(entry.originalFormat ?? ""),
+        originalSize: Number.isSafeInteger(entry.originalSize) ? entry.originalSize : 0
+      }));
 
-const cards = capes.map(entry => {
-  const updated = entry.updatedAt
-    ? new Date(entry.updatedAt).toLocaleString("pt-BR")
-    : "Desconhecido";
-const originalInfo = entry.originalFile
-  ? `${String(entry.originalFormat || "unknown").toUpperCase()} • ${entry.originalSize || 0} bytes`
-  : "Sem original salvo";
-  const banButton = isAdmin
-    ? `<button class="ban-btn" data-uuid="${escapeHtml(entry.uuid)}" data-name="${escapeHtml(entry.username || entry.uuid)}">Banir capa</button>`
-    : "";
-  return `
-    <div class="cape-card">
-<a href="${entry.originalFile ? `/original-image/${entry.uuid}` : `/cape-image/${entry.uuid}.png`}" target="_blank">
-  <img src="${entry.originalFile ? `/original-image/${entry.uuid}` : `/cape-image/${entry.uuid}.png`}" alt="Cape ${escapeHtml(entry.username || entry.uuid)}">
-</a>
-      <h2>${escapeHtml(entry.username || "unknown")}</h2>
-      <p class="muted">Atualizada: ${escapeHtml(updated)}</p>
-      <p class="muted">Original: ${escapeHtml(originalInfo)}</p>
-      <p class="hash">Hash: ${escapeHtml(String(entry.hash || "").slice(0, 12))}...</p>
-      ${banButton}
-    </div>
-  `;
-}).join("");
-
-    return res.type("html").send(`
+    return res.status(200).json({ ok: true, capes });
+  } catch (error) {
+    return handleError(res, error);
+  }
+});
+app.get("/capes", (req, res) => {
+  // Mesmo padrao de /banned: o token de admin nunca fica no HTML nem na URL,
+  // e pedido via prompt() e mantido so em memoria no navegador.
+  return res.type("html").send(`
 <!DOCTYPE html>
 <html>
 <head>
@@ -298,42 +291,122 @@ cursor:pointer;
 .ban-btn:hover{
 background:#e74c3c;
 }
+.ban-btn:disabled{
+background:#4a5568;
+cursor:default;
+}
+.msg{
+color:#aeb9c8;
+}
 </style>
 </head>
 <body>
-<h1>AdaptiveCaps Gallery</h1>
-<div class="grid">
-${cards || "<p>Nenhuma capa visível encontrada.</p>"}
-</div>
-${isAdmin ? `<script>
-const ADMIN_TOKEN = ${JSON.stringify(adminToken)};
-async function banCape(uuid, name) {
-  if (!confirm("Banir a capa de " + name + "? Isso apaga os arquivos do servidor e bloqueia novos envios ate desbanir.")) {
+<h1 id="title">AdaptiveCaps Gallery</h1>
+<div id="content" class="grid"><p class="msg">Carregando...</p></div>
+<script>
+let adminToken = "";
+
+function escapeHtml(value) {
+  const div = document.createElement("div");
+  div.textContent = String(value ?? "");
+  return div.innerHTML;
+}
+
+async function loadCapes() {
+  adminToken = window.prompt("Token de admin:") || "";
+  if (!adminToken) {
+    document.getElementById("content").innerHTML = '<p class="msg">Token nao informado.</p>';
     return;
   }
+
+  const content = document.getElementById("content");
+  content.innerHTML = '<p class="msg">Carregando...</p>';
+
   try {
-    const response = await fetch("/api/v1/admin/ban/" + uuid + "?admin=" + encodeURIComponent(ADMIN_TOKEN), { method: "POST" });
-    if (!response.ok) {
-      alert("Falha ao banir (status " + response.status + ").");
+    const response = await fetch("/api/v1/admin/capes", { headers: { "x-admin-token": adminToken } });
+    if (response.status === 403) {
+      content.innerHTML = '<p class="msg">Token invalido.</p>';
+      adminToken = "";
       return;
     }
-    location.reload();
+    if (!response.ok) {
+      content.innerHTML = '<p class="msg">Falha ao carregar (status ' + response.status + ').</p>';
+      return;
+    }
+
+    const data = await response.json();
+    renderCapes(data.capes || []);
   } catch (error) {
-    alert("Erro ao banir: " + error.message);
+    content.innerHTML = '<p class="msg">Erro ao carregar: ' + escapeHtml(error.message) + '</p>';
   }
 }
-document.querySelectorAll(".ban-btn").forEach(function (btn) {
-  btn.addEventListener("click", function () {
-    banCape(btn.dataset.uuid, btn.dataset.name);
+
+function renderCapes(capes) {
+  document.getElementById("title").textContent = "AdaptiveCaps Gallery (" + capes.length + ")";
+  const content = document.getElementById("content");
+
+  if (capes.length === 0) {
+    content.innerHTML = '<p class="msg">Nenhuma capa visivel encontrada.</p>';
+    return;
+  }
+
+  content.innerHTML = capes.map(function (entry) {
+    const updated = entry.updatedAt ? new Date(entry.updatedAt).toLocaleString("pt-BR") : "Desconhecido";
+    const originalInfo = entry.hasOriginal
+      ? (entry.originalFormat || "unknown").toUpperCase() + " • " + (entry.originalSize || 0) + " bytes"
+      : "Sem original salvo";
+    const imageUrl = entry.hasOriginal ? "/original-image/" + entry.uuid : "/cape-image/" + entry.uuid + ".png";
+    return (
+      '<div class="cape-card">' +
+      '<a href="' + imageUrl + '" target="_blank">' +
+      '<img src="' + imageUrl + '" alt="Cape ' + escapeHtml(entry.username || entry.uuid) + '">' +
+      "</a>" +
+      "<h2>" + escapeHtml(entry.username || "unknown") + "</h2>" +
+      '<p class="muted">Atualizada: ' + escapeHtml(updated) + "</p>" +
+      '<p class="muted">Original: ' + escapeHtml(originalInfo) + "</p>" +
+      '<p class="hash">Hash: ' + escapeHtml(String(entry.hash || "").slice(0, 12)) + "...</p>" +
+      '<button class="ban-btn" data-uuid="' + escapeHtml(entry.uuid) + '" data-name="' + escapeHtml(entry.username || entry.uuid) + '">Banir capa</button>' +
+      "</div>"
+    );
+  }).join("");
+
+  content.querySelectorAll(".ban-btn").forEach(function (btn) {
+    btn.addEventListener("click", function () {
+      banCape(btn.dataset.uuid, btn.dataset.name, btn);
+    });
   });
-});
-</script>` : ""}
+}
+
+async function banCape(uuid, name, btn) {
+  if (!window.confirm("Banir a capa de " + name + "? Isso apaga os arquivos do servidor e bloqueia novos envios ate desbanir.")) {
+    return;
+  }
+  btn.disabled = true;
+  btn.textContent = "Banindo...";
+  try {
+    const response = await fetch("/api/v1/admin/ban/" + uuid, {
+      method: "POST",
+      headers: { "x-admin-token": adminToken }
+    });
+    if (!response.ok) {
+      alert("Falha ao banir (status " + response.status + ").");
+      btn.disabled = false;
+      btn.textContent = "Banir capa";
+      return;
+    }
+    loadCapes();
+  } catch (error) {
+    alert("Erro ao banir: " + error.message);
+    btn.disabled = false;
+    btn.textContent = "Banir capa";
+  }
+}
+
+loadCapes();
+</script>
 </body>
 </html>
     `);
-  } catch (error) {
-    return handleError(res, error);
-  }
 });
 app.get("/api/v1/admin/banned", async (req, res) => {
   try {
