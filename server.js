@@ -17,10 +17,14 @@ const port = Number.parseInt(process.env.PORT ?? "8787", 10);
 const dataDir = path.resolve(process.env.DATA_DIR ?? "/opt/render/project/data");
 const capesDir = path.join(dataDir, "capes");
 const indexFile = path.join(dataDir, "index.json");
+const libraryDir = path.join(dataDir, "library");
+const libraryIndexFile = path.join(dataDir, "libraryIndex.json");
 
 const maxCapeBytes = Number.parseInt(process.env.MAX_CAPE_SIZE ?? "1048576", 10);
 const maxOriginalBytes = Number.parseInt(process.env.MAX_ORIGINAL_SIZE ?? "31457280", 10);
-const jsonLimitBytes = Math.ceil((maxCapeBytes + maxOriginalBytes) * 1.5) + 64 * 1024;
+const maxLibrarySlotBytes = Number.parseInt(process.env.MAX_LIBRARY_SLOT_SIZE ?? "6291456", 10);
+const librarySlotCount = 5;
+const jsonLimitBytes = Math.ceil(Math.max(maxCapeBytes + maxOriginalBytes, maxLibrarySlotBytes * librarySlotCount) * 1.5) + 64 * 1024;
 
 const uuidPattern =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -658,6 +662,108 @@ app.get("/api/v1/capes/:uuid", async (req, res) => {
   }
 });
 
+app.post("/api/v1/library/:uuid", async (req, res) => {
+  try {
+    const uuid = normalizeUuid(req.params.uuid);
+    const body = req.body ?? {};
+    const bodyUuid = normalizeUuid(body.uuid);
+
+    if (bodyUuid !== uuid) {
+      throw httpError(400, "uuid_mismatch");
+    }
+
+    const rawSlots = Array.isArray(body.slots) ? body.slots : [];
+
+    if (rawSlots.length > librarySlotCount) {
+      throw httpError(400, "too_many_slots");
+    }
+
+    const playerDir = path.join(libraryDir, uuid);
+    await fs.mkdir(playerDir, { recursive: true });
+
+    const storedSlots = [];
+    const keepFiles = new Set();
+
+    for (const rawSlot of rawSlots) {
+      const slotNumber = Number.parseInt(rawSlot?.slot, 10);
+
+      if (!Number.isInteger(slotNumber) || slotNumber < 1 || slotNumber > librarySlotCount) {
+        continue;
+      }
+
+      const file = decodeLibraryFile(rawSlot?.fileBase64);
+      const format = sanitizeOriginalFormat(rawSlot?.type);
+      const fileName = `slot-${slotNumber}.${format}`;
+
+      await fs.writeFile(path.join(playerDir, fileName), file);
+      keepFiles.add(fileName);
+
+      storedSlots.push({
+        slot: slotNumber,
+        name: sanitizeSlotName(rawSlot?.name, slotNumber),
+        type: format === "gif" ? "GIF" : "PNG",
+        file: fileName,
+        size: file.length
+      });
+    }
+
+    // Remove arquivos de slots que foram substituidos (formato trocado) ou apagados
+    await cleanupDir(playerDir, file => !keepFiles.has(file));
+
+    const updatedAt =
+      Number.isSafeInteger(body.updatedAt) && body.updatedAt > 0 ? body.updatedAt : Date.now();
+
+    const index = await readLibraryIndex();
+    index[uuid] = { uuid, updatedAt, slots: storedSlots };
+    await writeLibraryIndex(index);
+
+    console.info(`[LIBRARY] upload uuid=${uuid.substring(0, 4)}**** slots=${storedSlots.length}`);
+
+    return res.status(200).json({ ok: true, uuid, updatedAt, slotCount: storedSlots.length });
+  } catch (error) {
+    return handleError(res, error);
+  }
+});
+
+app.get("/api/v1/library/:uuid", async (req, res) => {
+  try {
+    const rawUuid = String(req.params.uuid ?? "").toLowerCase();
+
+    if (!uuidPattern.test(rawUuid)) {
+      return res.status(404).json({ ok: false, error: "not_found" });
+    }
+
+    const uuid = normalizeUuid(rawUuid);
+    const index = await readLibraryIndex();
+    const entry = index[uuid];
+
+    if (!entry || !Array.isArray(entry.slots) || entry.slots.length === 0) {
+      throw httpError(404, "not_found");
+    }
+
+    const playerDir = path.join(libraryDir, uuid);
+    const slots = [];
+
+    for (const slot of entry.slots) {
+      try {
+        const file = await fs.readFile(path.join(playerDir, slot.file));
+        slots.push({
+          slot: slot.slot,
+          name: slot.name,
+          type: slot.type,
+          fileBase64: file.toString("base64")
+        });
+      } catch {
+        // arquivo ausente/corrompido - pula esse slot em vez de falhar tudo
+      }
+    }
+
+    return res.status(200).json({ ok: true, uuid, updatedAt: entry.updatedAt, slots });
+  } catch (error) {
+    return handleError(res, error);
+  }
+});
+
 app.use((error, req, res, next) => {
   if (error?.type === "entity.too.large") {
     return res.status(413).json({
@@ -671,6 +777,7 @@ app.use((error, req, res, next) => {
 
 app.listen(port, "0.0.0.0", async () => {
   await fs.mkdir(capesDir, { recursive: true });
+  await fs.mkdir(libraryDir, { recursive: true });
   console.log(`AdaptiveCapes Relay online on port ${port}`);
 });
 
@@ -754,6 +861,68 @@ async function writeIndex(metadata) {
   await fs.writeFile(
     indexFile,
     JSON.stringify(metadata, null, 2),
+    "utf8"
+  );
+}
+
+function decodeLibraryFile(value) {
+  if (typeof value !== "string" || value.length === 0) {
+    throw httpError(400, "missing_fileBase64");
+  }
+
+  if (value.length > Math.ceil(maxLibrarySlotBytes * 1.4) + 16) {
+    throw httpError(413, "slot_too_large");
+  }
+
+  if (value.length % 4 !== 0 || !base64Pattern.test(value)) {
+    throw httpError(400, "invalid_base64");
+  }
+
+  const buffer = Buffer.from(value, "base64");
+
+  if (buffer.length <= 0 || buffer.length > maxLibrarySlotBytes) {
+    throw httpError(413, "slot_too_large");
+  }
+
+  return buffer;
+}
+
+function sanitizeSlotName(value, slotNumber) {
+  const name = String(value ?? "")
+    .replace(/[^\x20-\x7E]/g, "")
+    .trim()
+    .slice(0, 32);
+
+  return name.length > 0 ? name : `Slot ${slotNumber}`;
+}
+
+async function readLibraryIndex() {
+  try {
+    const raw = await fs.readFile(libraryIndexFile, "utf8");
+    const parsed = JSON.parse(raw);
+
+    if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+      return parsed;
+    }
+
+    return {};
+  } catch (error) {
+    if (error.code === "ENOENT") {
+      return {};
+    }
+
+    throw error;
+  }
+}
+
+async function writeLibraryIndex(index) {
+  await fs.mkdir(path.dirname(libraryIndexFile), {
+    recursive: true
+  });
+
+  await fs.writeFile(
+    libraryIndexFile,
+    JSON.stringify(index, null, 2),
     "utf8"
   );
 }
