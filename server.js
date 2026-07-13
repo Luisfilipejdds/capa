@@ -1511,89 +1511,71 @@ function buildAiCapePrompt(prompt, style, mainColor, quality) {
   return parts.join(", ");
 }
 
-// FLUX.1-dev (ao contrario do schnell, que e destilado para 1-4 passos) segue
-// o prompt de forma bem mais fiel quando roda com mais steps de denoising -
-// e por isso que trocamos para ele: schnell prioriza velocidade e ignora
-// detalhes do prompt, dev realmente tenta desenhar o que foi pedido.
-// "high" usa mais resolucao E mais steps, nao so mais resolucao.
+// FLUX.1-schnell via Hugging Face era rapido mas ignorava boa parte do prompt
+// (destilado pra 1-4 steps). Tentamos FLUX.1-dev (mais fiel ao prompt) no
+// mesmo provedor, mas a Hugging Face descontinuou esse modelo no tier gratis
+// ("hf-inference") - retorna 410 deprecated. Pollinations.ai expoe o Flux de
+// verdade (nao destilado) de graca e sem token/conta nenhuma, entao trocamos
+// para la: melhor fidelidade ao prompt E sem dependencia de credencial.
 const AI_QUALITY_DIMENSIONS = {
-  standard: { width: 768, height: 384, steps: 28 },
-  high: { width: 1152, height: 576, steps: 40 }
+  standard: { width: 768, height: 384 },
+  high: { width: 1152, height: 576 }
 };
 
 async function generateFluxImage(prompt, quality) {
-  const token = process.env.HF_TOKEN;
-
-  if (!token) {
-    throw httpError(500, "missing_hf_token");
-  }
-
   const dimensions = AI_QUALITY_DIMENSIONS[quality] ?? AI_QUALITY_DIMENSIONS.standard;
 
   for (let attempt = 1; attempt <= 2; attempt++) {
     const controller = new AbortController();
-    // dev nao e destilado como schnell, entao demora bem mais por imagem -
-    // 45s estourava o timeout no meio de geracoes normais.
-    const timeout = setTimeout(() => controller.abort(), 90000);
+    const timeout = setTimeout(() => controller.abort(), 60000);
+
+    // Seed aleatorio a cada chamada: sem isso, o mesmo prompt+dimensoes
+    // sempre voltaria a mesma imagem (Pollinations usa a URL como chave).
+    const seed = Math.floor(Math.random() * 1_000_000_000);
+    const url =
+      `https://image.pollinations.ai/prompt/${encodeURIComponent(prompt)}` +
+      `?width=${dimensions.width}&height=${dimensions.height}&model=flux&nologo=true&seed=${seed}`;
 
     let response;
     try {
-      response = await fetch(
-        "https://router.huggingface.co/hf-inference/models/black-forest-labs/FLUX.1-dev",
-        {
-          method: "POST",
-          signal: controller.signal,
-          headers: {
-            Authorization: `Bearer ${token}`,
-            "Content-Type": "application/json"
-          },
-          body: JSON.stringify({
-            inputs: prompt,
-            parameters: {
-              width: dimensions.width,
-              height: dimensions.height,
-              num_inference_steps: dimensions.steps
-            }
-          })
-        }
-      );
+      response = await fetch(url, { signal: controller.signal });
     } catch (error) {
+      clearTimeout(timeout);
+
       if (error.name === "AbortError") {
+        if (attempt < 2) {
+          continue;
+        }
         throw httpError(504, "ai_timeout", "A geracao demorou demais e foi cancelada. Tente novamente.");
       }
-      throw httpError(502, "ai_provider_error");
-    } finally {
-      clearTimeout(timeout);
-    }
 
-    const contentType = response.headers.get("content-type") ?? "";
+      if (attempt < 2) {
+        continue;
+      }
+      throw httpError(502, "ai_provider_error");
+    }
+    clearTimeout(timeout);
 
     if (!response.ok) {
-      // A API da Hugging Face retorna 503 com "estimated_time" enquanto um modelo
-      // gratuito "acorda" de um cold start; vale a pena esperar e tentar uma vez.
-      if (response.status === 503 && attempt === 1) {
-        let waitSeconds = 8;
-        try {
-          const errorJson = await response.json();
-          if (typeof errorJson?.estimated_time === "number") {
-            waitSeconds = Math.min(20, Math.max(3, Math.ceil(errorJson.estimated_time)));
-          }
-        } catch {
-          // corpo sem JSON valido — usa o tempo de espera padrao
-        }
-        console.info(`[AI] Modelo carregando na Hugging Face, aguardando ${waitSeconds}s antes de tentar de novo.`);
-        await new Promise(resolve => setTimeout(resolve, waitSeconds * 1000));
+      if (attempt < 2) {
+        await new Promise(resolve => setTimeout(resolve, 2000));
         continue;
       }
 
       const errorText = await response.text().catch(() => "");
-      console.error("[AI] Hugging Face error:", response.status, errorText);
+      console.error("[AI] Pollinations error:", response.status, errorText.slice(0, 300));
       throw httpError(502, "ai_provider_error");
     }
 
-    if (contentType.includes("application/json")) {
-      const json = await response.json();
-      console.error("[AI] Unexpected JSON response:", json);
+    const contentType = response.headers.get("content-type") ?? "";
+
+    if (!contentType.startsWith("image/")) {
+      const bodyText = await response.text().catch(() => "");
+      console.error("[AI] Pollinations retornou resposta que nao e imagem:", contentType, bodyText.slice(0, 300));
+
+      if (attempt < 2) {
+        continue;
+      }
       throw httpError(502, "ai_invalid_response");
     }
 
