@@ -186,30 +186,179 @@ if (!file) {
   }
 });
 
+function listVisibleCapes(metadata) {
+  return Object.values(metadata)
+    .filter(entry => entry?.visible === true && entry?.hash)
+    .sort((a, b) => Number(b.updatedAt ?? 0) - Number(a.updatedAt ?? 0))
+    .map(entry => ({
+      uuid: String(entry.uuid ?? ""),
+      username: String(entry.username ?? ""),
+      updatedAt: Number.isSafeInteger(entry.updatedAt) ? entry.updatedAt : 0,
+      hash: String(entry.hash ?? ""),
+      hasOriginal: Boolean(entry.originalFile),
+      originalFormat: String(entry.originalFormat ?? ""),
+      originalSize: Number.isSafeInteger(entry.originalSize) ? entry.originalSize : 0
+    }));
+}
+
 app.get("/api/v1/admin/capes", async (req, res) => {
   try {
     requireAdmin(req);
     const metadata = await readIndex();
-
-    const capes = Object.values(metadata)
-      .filter(entry => entry?.visible === true && entry?.hash)
-      .sort((a, b) => Number(b.updatedAt ?? 0) - Number(a.updatedAt ?? 0))
-      .map(entry => ({
-        uuid: String(entry.uuid ?? ""),
-        username: String(entry.username ?? ""),
-        updatedAt: Number.isSafeInteger(entry.updatedAt) ? entry.updatedAt : 0,
-        hash: String(entry.hash ?? ""),
-        hasOriginal: Boolean(entry.originalFile),
-        originalFormat: String(entry.originalFormat ?? ""),
-        originalSize: Number.isSafeInteger(entry.originalSize) ? entry.originalSize : 0
-      }));
-
-    return res.status(200).json({ ok: true, capes });
+    return res.status(200).json({ ok: true, capes: listVisibleCapes(metadata) });
+  } catch (error) {
+    return handleError(res, error);
+  }
+});
+// Galeria publica (sem token, sem opcao de banir) - a mesma lista de capas
+// visiveis, mas sem qualquer acao administrativa exposta.
+app.get("/api/v1/capes/gallery", async (req, res) => {
+  try {
+    const metadata = await readIndex();
+    return res.status(200).json({ ok: true, capes: listVisibleCapes(metadata) });
   } catch (error) {
     return handleError(res, error);
   }
 });
 app.get("/capes", (req, res) => {
+  // Publica de proposito: so visualizacao, sem prompt de token e sem botao de
+  // banir. A acao de banir fica isolada em /admincape (exige token), assim
+  // ninguem precisa (nem tem motivo pra) salvar um link com token pra ver a
+  // galeria publica.
+  return res.type("html").send(`
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>AdaptiveCaps Gallery</title>
+<style>
+body{
+background:#0f1720;
+color:white;
+font-family:Arial,sans-serif;
+margin:0;
+padding:30px;
+}
+h1{
+color:#31b7ff;
+}
+.grid{
+display:grid;
+grid-template-columns:repeat(auto-fill,minmax(180px,1fr));
+gap:20px;
+}
+.cape-card{
+background:#182331;
+padding:18px;
+border-radius:14px;
+text-align:center;
+box-shadow:0 0 20px rgba(0,0,0,.25);
+}
+.cape-card img{
+max-width:128px;
+image-rendering:pixelated;
+background:#263548;
+border-radius:8px;
+padding:10px;
+}
+.cape-card h2{
+font-size:18px;
+margin:12px 0 6px;
+}
+.cape-card p{
+font-size:11px;
+color:#aeb9c8;
+word-break:break-all;
+}
+.muted{
+color:#aeb9c8;
+font-size:12px;
+}
+
+.hash{
+font-size:10px;
+color:#718096;
+word-break:break-all;
+}
+
+.cape-card a{
+display:inline-block;
+}
+
+.cape-card img:hover{
+transform:scale(1.08);
+transition:.15s;
+}
+
+.msg{
+color:#aeb9c8;
+}
+</style>
+</head>
+<body>
+<h1 id="title">AdaptiveCaps Gallery</h1>
+<div id="content" class="grid"><p class="msg">Carregando...</p></div>
+<script>
+function escapeHtml(value) {
+  const div = document.createElement("div");
+  div.textContent = String(value ?? "");
+  return div.innerHTML;
+}
+
+async function loadCapes() {
+  const content = document.getElementById("content");
+  content.innerHTML = '<p class="msg">Carregando...</p>';
+
+  try {
+    const response = await fetch("/api/v1/capes/gallery");
+    if (!response.ok) {
+      content.innerHTML = '<p class="msg">Falha ao carregar (status ' + response.status + ').</p>';
+      return;
+    }
+
+    const data = await response.json();
+    renderCapes(data.capes || []);
+  } catch (error) {
+    content.innerHTML = '<p class="msg">Erro ao carregar: ' + escapeHtml(error.message) + '</p>';
+  }
+}
+
+function renderCapes(capes) {
+  document.getElementById("title").textContent = "AdaptiveCaps Gallery (" + capes.length + ")";
+  const content = document.getElementById("content");
+
+  if (capes.length === 0) {
+    content.innerHTML = '<p class="msg">Nenhuma capa visivel encontrada.</p>';
+    return;
+  }
+
+  content.innerHTML = capes.map(function (entry) {
+    const updated = entry.updatedAt ? new Date(entry.updatedAt).toLocaleString("pt-BR") : "Desconhecido";
+    const originalInfo = entry.hasOriginal
+      ? (entry.originalFormat || "unknown").toUpperCase() + " • " + (entry.originalSize || 0) + " bytes"
+      : "Sem original salvo";
+    const imageUrl = entry.hasOriginal ? "/original-image/" + entry.uuid : "/cape-image/" + entry.uuid + ".png";
+    return (
+      '<div class="cape-card">' +
+      '<a href="' + imageUrl + '" target="_blank">' +
+      '<img src="' + imageUrl + '" alt="Cape ' + escapeHtml(entry.username || entry.uuid) + '">' +
+      "</a>" +
+      "<h2>" + escapeHtml(entry.username || "unknown") + "</h2>" +
+      '<p class="muted">Atualizada: ' + escapeHtml(updated) + "</p>" +
+      '<p class="muted">Original: ' + escapeHtml(originalInfo) + "</p>" +
+      '<p class="hash">Hash: ' + escapeHtml(String(entry.hash || "").slice(0, 12)) + "...</p>" +
+      "</div>"
+    );
+  }).join("");
+}
+
+loadCapes();
+</script>
+</body>
+</html>
+    `);
+});
+app.get("/admincape", (req, res) => {
   // Mesmo padrao de /banned: o token de admin nunca fica no HTML nem na URL,
   // e pedido via prompt() e mantido so em memoria no navegador.
   return res.type("html").send(`
@@ -217,7 +366,7 @@ app.get("/capes", (req, res) => {
 <html>
 <head>
 <meta charset="utf-8">
-<title>AdaptiveCaps Gallery</title>
+<title>AdaptiveCaps Admin - Capas</title>
 <style>
 body{
 background:#0f1720;
@@ -301,7 +450,7 @@ color:#aeb9c8;
 </style>
 </head>
 <body>
-<h1 id="title">AdaptiveCaps Gallery</h1>
+<h1 id="title">AdaptiveCaps Admin - Capas</h1>
 <div id="content" class="grid"><p class="msg">Carregando...</p></div>
 <script>
 let adminToken = "";
@@ -342,7 +491,7 @@ async function loadCapes() {
 }
 
 function renderCapes(capes) {
-  document.getElementById("title").textContent = "AdaptiveCaps Gallery (" + capes.length + ")";
+  document.getElementById("title").textContent = "AdaptiveCaps Admin - Capas (" + capes.length + ")";
   const content = document.getElementById("content");
 
   if (capes.length === 0) {
