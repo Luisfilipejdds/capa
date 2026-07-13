@@ -601,6 +601,19 @@ app.get("/api/v1/health", (req, res) => {
 });
 const aiCooldowns = new Map();
 
+// Sem isso, aiCooldowns cresce para sempre (uma entrada por UUID que ja usou
+// o gerador de IA alguma vez). O cooldown em si e de 30s, entao qualquer
+// entrada mais velha que isso ja nao serve pra nada.
+setInterval(() => {
+  const cutoff = Date.now() - 30000;
+
+  for (const [uuid, lastUse] of aiCooldowns) {
+    if (lastUse < cutoff) {
+      aiCooldowns.delete(uuid);
+    }
+  }
+}, 5 * 60 * 1000).unref();
+
 app.post("/api/v1/ai/generate-cape", async (req, res) => {
   try {
     const body = req.body ?? {};
@@ -662,9 +675,12 @@ app.post("/api/v1/capes/:uuid", async (req, res) => {
         ? body.updatedAt
         : Date.now();
 
-    const metadata = await readIndex();
+    // Leitura rapida (fora do lock) so para rejeitar cedo o caso comum de
+    // "nao esta banido" antes de fazer qualquer I/O de arquivo. O status real
+    // e reconferido dentro do lock, logo antes de gravar, la embaixo.
+    const precheck = await readIndex();
 
-    if (metadata[uuid]?.banned) {
+    if (precheck[uuid]?.banned) {
       throw httpError(
         403,
         "banned",
@@ -673,17 +689,19 @@ app.post("/api/v1/capes/:uuid", async (req, res) => {
     }
 
     if (!visible) {
-      metadata[uuid] = {
-        ...(metadata[uuid] ?? {}),
-        uuid,
-        username,
-        visible: false,
-        updatedAt
-      };
+      const entry = await updateIndexEntry(metadata => {
+        metadata[uuid] = {
+          ...(metadata[uuid] ?? {}),
+          uuid,
+          username,
+          visible: false,
+          updatedAt
+        };
+        return metadata[uuid];
+      });
 
-      await writeIndex(metadata);
       console.info(`[VISIBILITY] ${username || "unknown"} (${uuid.substring(0, 4)}****) invisible`);
-      return res.status(200).json(toCapeResponse(metadata[uuid], ""));
+      return res.status(200).json(toCapeResponse(entry, ""));
     }
 
     const hash = String(body.hash ?? "").toLowerCase();
@@ -729,28 +747,37 @@ app.post("/api/v1/capes/:uuid", async (req, res) => {
     const frameCount = Number.isSafeInteger(body.frameCount) && body.frameCount > 0 ? body.frameCount : 0;
     const fps = Number.isSafeInteger(body.fps) && body.fps > 0 ? body.fps : 0;
 
-    metadata[uuid] = {
-      uuid,
-      username,
-      hash,
-      renderHash: hash,
-      renderFile: `renders/${hash}.png`,
-      originalHash,
-      originalFile: originalFile ? `originals/${originalFile}` : "",
-      originalFormat,
-      originalSize,
-      animated,
-      frameCount,
-      fps,
-      visible: true,
-      updatedAt
-    };
+    const entry = await updateIndexEntry(metadata => {
+      if (metadata[uuid]?.banned) {
+        throw httpError(
+          403,
+          "banned",
+          "Sua capa foi removida do Cloud Sync por um moderador. Voce ainda pode usar qualquer capa localmente (so voce vai ve-la), mas ela nao vai sincronizar nem aparecer para outros jogadores. Para pedir revisao, chame @luisfilipejdds no Discord."
+        );
+      }
 
-    await writeIndex(metadata);
+      metadata[uuid] = {
+        uuid,
+        username,
+        hash,
+        renderHash: hash,
+        renderFile: `renders/${hash}.png`,
+        originalHash,
+        originalFile: originalFile ? `originals/${originalFile}` : "",
+        originalFormat,
+        originalSize,
+        animated,
+        frameCount,
+        fps,
+        visible: true,
+        updatedAt
+      };
+      return metadata[uuid];
+    });
 
     console.info(`[UPLOAD] ${username || "unknown"} (${uuid.substring(0, 4)}****) render=${renderPng.length} original=${originalSize}`);
 
-    return res.status(200).json(toCapeResponse(metadata[uuid], renderPng.toString("base64")));
+    return res.status(200).json(toCapeResponse(entry, renderPng.toString("base64")));
   } catch (error) {
     return handleError(res, error);
   }
@@ -760,28 +787,30 @@ app.post("/api/v1/admin/ban/:uuid", async (req, res) => {
   try {
     requireAdmin(req);
     const uuid = normalizeUuid(req.params.uuid);
-    const metadata = await readIndex();
-    const existing = metadata[uuid] ?? {};
 
     await purgePlayerFiles(uuid);
 
-    metadata[uuid] = {
-      uuid,
-      username: existing.username ?? "",
-      visible: false,
-      banned: true,
-      bannedAt: Date.now(),
-      hash: "",
-      renderFile: "",
-      originalHash: "",
-      originalFile: "",
-      originalFormat: "",
-      originalSize: 0,
-      updatedAt: Date.now()
-    };
+    const entry = await updateIndexEntry(metadata => {
+      const existing = metadata[uuid] ?? {};
 
-    await writeIndex(metadata);
-    console.info(`[BAN] ${metadata[uuid].username || "unknown"} (${uuid.substring(0, 4)}****) banido pelo admin`);
+      metadata[uuid] = {
+        uuid,
+        username: existing.username ?? "",
+        visible: false,
+        banned: true,
+        bannedAt: Date.now(),
+        hash: "",
+        renderFile: "",
+        originalHash: "",
+        originalFile: "",
+        originalFormat: "",
+        originalSize: 0,
+        updatedAt: Date.now()
+      };
+      return metadata[uuid];
+    });
+
+    console.info(`[BAN] ${entry.username || "unknown"} (${uuid.substring(0, 4)}****) banido pelo admin`);
     return res.status(200).json({ ok: true, uuid, banned: true });
   } catch (error) {
     return handleError(res, error);
@@ -792,15 +821,18 @@ app.post("/api/v1/admin/unban/:uuid", async (req, res) => {
   try {
     requireAdmin(req);
     const uuid = normalizeUuid(req.params.uuid);
-    const metadata = await readIndex();
-    const entry = metadata[uuid];
 
-    if (!entry) {
-      return res.status(404).json({ ok: false, error: "not_found" });
-    }
+    const entry = await updateIndexEntry(metadata => {
+      const existing = metadata[uuid];
 
-    metadata[uuid] = { ...entry, banned: false };
-    await writeIndex(metadata);
+      if (!existing) {
+        throw httpError(404, "not_found");
+      }
+
+      metadata[uuid] = { ...existing, banned: false };
+      return metadata[uuid];
+    });
+
     console.info(`[UNBAN] ${entry.username || "unknown"} (${uuid.substring(0, 4)}****) desbanido pelo admin`);
     return res.status(200).json({ ok: true, uuid, banned: false });
   } catch (error) {
@@ -822,17 +854,22 @@ app.get("/api/v1/capes/bulk", async (req, res) => {
       .filter(value => uuidPattern.test(value))
       .slice(0, 40);
 
-    const capes = [];
+    // Le o index uma unica vez (em vez de uma leitura+parse completa do
+    // index.json por UUID) e busca os arquivos em paralelo. Tambem isola cada
+    // entrada com catch: uma capa corrompida/com hash divergente nao pode
+    // derrubar a resposta inteira e impedir que os outros jogadores da mesma
+    // chamada recebam a capa deles.
+    const metadata = await readIndex();
+    const results = await Promise.all(
+      uuids.map(uuid =>
+        loadCape(uuid, metadata).catch(error => {
+          console.error(`[BULK] falha ao carregar capa ${uuid}:`, error?.message ?? error);
+          return null;
+        })
+      )
+    );
 
-    for (const uuid of uuids) {
-      const cape = await loadCape(uuid);
-
-      if (cape) {
-        capes.push(cape);
-      }
-    }
-
-    return res.status(200).json({ capes });
+    return res.status(200).json({ capes: results.filter(Boolean) });
   } catch (error) {
     return handleError(res, error);
   }
@@ -982,9 +1019,10 @@ app.post("/api/v1/library/:uuid", async (req, res) => {
       Number.isSafeInteger(body.updatedAt) && body.updatedAt > 0 ? body.updatedAt : Date.now();
     const username = sanitizeUsername(body.username);
 
-    const index = await readLibraryIndex();
-    index[uuid] = { uuid, username, updatedAt, slots: storedSlots };
-    await writeLibraryIndex(index);
+    await updateLibraryIndexEntry(index => {
+      index[uuid] = { uuid, username, updatedAt, slots: storedSlots };
+      return index[uuid];
+    });
 
     console.info(`[LIBRARY] upload ${username || "unknown"} (${uuid.substring(0, 4)}****) slots=${storedSlots.length}`);
 
@@ -1050,8 +1088,8 @@ app.listen(port, "0.0.0.0", async () => {
   console.log(`AdaptiveCapes Relay online on port ${port}`);
 });
 
-async function loadCape(uuid) {
-  const metadata = await readIndex();
+async function loadCape(uuid, preloadedMetadata) {
+  const metadata = preloadedMetadata ?? (await readIndex());
   const entry = metadata[uuid];
 
   if (!entry) {
@@ -1195,6 +1233,45 @@ async function writeJsonAtomic(targetFile, data) {
   await fs.rename(tempFile, targetFile);
 }
 
+// fs.rename() torna cada escrita individual atomica, mas nao protege contra
+// "lost update": duas requisicoes concorrentes (ex.: dois jogadores enviando
+// capa ao mesmo tempo, ou um admin banindo enquanto outro jogador envia) cada
+// uma le o index inteiro, mexe so na propria entrada, e escreve o index
+// inteiro de volta - a segunda escrita apaga a mudanca da primeira porque
+// partiu de uma copia desatualizada de todo o resto. Esse mutex serializa o
+// ciclo ler-mudar-escrever para que cada atualizacao sempre parta do estado
+// mais recente ja confirmado em disco.
+function createMutex() {
+  let tail = Promise.resolve();
+
+  return function withLock(fn) {
+    const run = tail.then(() => fn());
+    tail = run.then(() => undefined, () => undefined);
+    return run;
+  };
+}
+
+const indexLock = createMutex();
+const libraryIndexLock = createMutex();
+
+async function updateIndexEntry(mutate) {
+  return indexLock(async () => {
+    const metadata = await readIndex();
+    const result = await mutate(metadata);
+    await writeIndex(metadata);
+    return result;
+  });
+}
+
+async function updateLibraryIndexEntry(mutate) {
+  return libraryIndexLock(async () => {
+    const index = await readLibraryIndex();
+    const result = await mutate(index);
+    await writeLibraryIndex(index);
+    return result;
+  });
+}
+
 async function countCapeFiles() {
   let total = 0;
 
@@ -1261,7 +1338,9 @@ function requireAdmin(req) {
     throw httpError(503, "admin_disabled");
   }
 
-  const provided = String(req.get("x-admin-token") ?? req.query.admin ?? "");
+  // Somente header - query string ficaria no historico do navegador e nos logs
+  // de acesso (mesmo motivo pelo qual /capes e /banned usam prompt() + header).
+  const provided = String(req.get("x-admin-token") ?? "");
   const providedBuffer = Buffer.from(provided);
   const tokenBuffer = Buffer.from(adminToken);
 
