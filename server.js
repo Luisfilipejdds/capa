@@ -620,7 +620,13 @@ app.post("/api/v1/ai/generate-cape", async (req, res) => {
 
     const uuid = normalizeUuid(body.uuid);
     const username = sanitizeUsername(body.username);
-    const prompt = String(body.prompt ?? "").trim().slice(0, 180);
+    // 300 (nao 180) de proposito: o mod (versoes ja instaladas) embrulha o
+    // texto do jogador num template fixo de ~148 caracteres antes de mandar
+    // pra ca, entao um prompt de usuario perto do limite de 96 chars do campo
+    // de texto do mod resulta em ~244 caracteres. Cortar em 180 truncava esse
+    // embrulho no meio, quebrando a deteccao/remocao dele em buildAiCapePrompt
+    // e fazendo o "boilerplate" tecnico voltar a dominar o prompt final.
+    const prompt = String(body.prompt ?? "").trim().slice(0, 300);
     const style = String(body.style ?? "minecraft").trim().slice(0, 40);
     const mainColor = String(body.mainColor ?? "").trim().slice(0, 30);
     const quality = String(body.quality ?? "standard").trim().slice(0, 30);
@@ -1498,7 +1504,9 @@ const LEGACY_CLIENT_WRAPPER =
 function buildAiCapePrompt(prompt, style, mainColor, quality) {
   const trimmed = String(prompt ?? "").trim();
   const legacyMatch = LEGACY_CLIENT_WRAPPER.exec(trimmed);
-  const subject = legacyMatch ? legacyMatch[1].trim() : trimmed;
+  // Limita o assunto DEPOIS de extrair (nao antes) - assim o limite de tamanho
+  // nunca corta o fecho do embrulho legado e quebra a deteccao acima.
+  const subject = (legacyMatch ? legacyMatch[1].trim() : trimmed).slice(0, 180);
 
   // Nao mencionamos a palavra "cape" aqui de proposito: o modelo tende a
   // interpretar isso literalmente como "desenhe um manto/capa vestida" (uma
