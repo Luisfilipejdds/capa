@@ -1481,19 +1481,31 @@ async function getStorageSizeMb() {
 
   return (totalBytes / 1024 / 1024).toFixed(2);
 }
+// Versoes antigas do mod ja embrulham o texto do jogador com o proprio
+// boilerplate ("Minecraft cape texture, 64x32 pixel art layout, X theme,
+// high contrast, clean centered design, no text, no watermark, sharp pixels,
+// cape back design."). Se a gente colar OUTRO boilerplate por cima (como
+// fazia antes) mais "anime style, main color purple" no final, o pedido real
+// do jogador (ex.: "a house") fica espremido no meio de uma pilha de termos
+// tecnicos repetidos e o estilo/cor no final acaba dominando tudo - testamos
+// e o resultado era sempre uma variacao do mesmo desenho generico, ignorando
+// o assunto pedido. Por isso: (1) se detectar esse embrulho antigo, extrai so
+// o assunto real de dentro dele; (2) poe o assunto em PRIMEIRO lugar no
+// prompt final, com o resto como modificador leve, nao dominante.
+const LEGACY_CLIENT_WRAPPER =
+  /^Minecraft cape texture,\s*64x32 pixel art layout,\s*(.+?)\s*theme,\s*high contrast,\s*clean centered design,\s*no text,\s*no watermark,\s*sharp pixels,\s*cape back design\.?$/i;
+
 function buildAiCapePrompt(prompt, style, mainColor, quality) {
+  const trimmed = String(prompt ?? "").trim();
+  const legacyMatch = LEGACY_CLIENT_WRAPPER.exec(trimmed);
+  const subject = legacyMatch ? legacyMatch[1].trim() : trimmed;
+
   const parts = [
-    "Minecraft cape texture",
-    "64x32 pixel art cape layout",
-    "cape back design",
-    "sharp pixels",
-    "clean centered composition",
-    "high contrast",
-    "no text",
-    "no watermark",
-    "no logo",
-    "game texture style",
-    prompt
+    subject,
+    "minecraft cape back texture",
+    "64x32 pixel art, sharp pixels",
+    "centered symmetrical design",
+    "no text, no watermark, no logo"
   ];
 
   if (style) {
@@ -1501,7 +1513,7 @@ function buildAiCapePrompt(prompt, style, mainColor, quality) {
   }
 
   if (mainColor) {
-    parts.push(`main color ${mainColor}`);
+    parts.push(`accented with ${mainColor}`);
   }
 
   if (quality === "high") {
