@@ -1511,13 +1511,14 @@ function buildAiCapePrompt(prompt, style, mainColor, quality) {
   return parts.join(", ");
 }
 
-// FLUX.1-schnell e destilado para poucos passos (1-4); mais steps nao melhora a
-// qualidade de forma perceptivel, entao a diferenca real entre "standard" e "high"
-// vem da resolucao gerada (mais resolucao = menos ruido ao reduzir para o tamanho
-// da capa depois).
+// FLUX.1-dev (ao contrario do schnell, que e destilado para 1-4 passos) segue
+// o prompt de forma bem mais fiel quando roda com mais steps de denoising -
+// e por isso que trocamos para ele: schnell prioriza velocidade e ignora
+// detalhes do prompt, dev realmente tenta desenhar o que foi pedido.
+// "high" usa mais resolucao E mais steps, nao so mais resolucao.
 const AI_QUALITY_DIMENSIONS = {
-  standard: { width: 768, height: 384 },
-  high: { width: 1152, height: 576 }
+  standard: { width: 768, height: 384, steps: 28 },
+  high: { width: 1152, height: 576, steps: 40 }
 };
 
 async function generateFluxImage(prompt, quality) {
@@ -1531,12 +1532,14 @@ async function generateFluxImage(prompt, quality) {
 
   for (let attempt = 1; attempt <= 2; attempt++) {
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 45000);
+    // dev nao e destilado como schnell, entao demora bem mais por imagem -
+    // 45s estourava o timeout no meio de geracoes normais.
+    const timeout = setTimeout(() => controller.abort(), 90000);
 
     let response;
     try {
       response = await fetch(
-        "https://router.huggingface.co/hf-inference/models/black-forest-labs/FLUX.1-schnell",
+        "https://router.huggingface.co/hf-inference/models/black-forest-labs/FLUX.1-dev",
         {
           method: "POST",
           signal: controller.signal,
@@ -1549,7 +1552,7 @@ async function generateFluxImage(prompt, quality) {
             parameters: {
               width: dimensions.width,
               height: dimensions.height,
-              num_inference_steps: 4
+              num_inference_steps: dimensions.steps
             }
           })
         }
