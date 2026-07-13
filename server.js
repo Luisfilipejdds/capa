@@ -1500,9 +1500,14 @@ function buildAiCapePrompt(prompt, style, mainColor, quality) {
   const legacyMatch = LEGACY_CLIENT_WRAPPER.exec(trimmed);
   const subject = legacyMatch ? legacyMatch[1].trim() : trimmed;
 
+  // Nao mencionamos a palavra "cape" aqui de proposito: o modelo tende a
+  // interpretar isso literalmente como "desenhe um manto/capa vestida" (uma
+  // peca de pano pendurada), em vez de tratar a imagem como um icone plano -
+  // o que competia com o assunto pedido e as vezes produzia um pano/manto
+  // generico por cima em vez do desenho em si.
   const parts = [
     subject,
-    "minecraft cape back texture",
+    "flat 2D game icon texture, no garment, no clothing shape, no fabric folds or drapery",
     "64x32 pixel art, sharp pixels",
     "centered symmetrical design",
     "no text, no watermark, no logo"
