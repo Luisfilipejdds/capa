@@ -1123,15 +1123,7 @@ async function readIndex() {
 }
 
 async function writeIndex(metadata) {
-  await fs.mkdir(path.dirname(indexFile), {
-    recursive: true
-  });
-
-  await fs.writeFile(
-    indexFile,
-    JSON.stringify(metadata, null, 2),
-    "utf8"
-  );
+  await writeJsonAtomic(indexFile, metadata);
 }
 
 function decodeLibraryFile(value) {
@@ -1185,15 +1177,22 @@ async function readLibraryIndex() {
 }
 
 async function writeLibraryIndex(index) {
-  await fs.mkdir(path.dirname(libraryIndexFile), {
-    recursive: true
-  });
+  await writeJsonAtomic(libraryIndexFile, index);
+}
 
-  await fs.writeFile(
-    libraryIndexFile,
-    JSON.stringify(index, null, 2),
-    "utf8"
-  );
+// Grava em um arquivo temporario no mesmo diretorio e so entao renomeia por cima
+// do arquivo final. rename() e atomico no mesmo filesystem, entao um leitor
+// concorrente sempre ve a versao antiga completa ou a nova completa - nunca um
+// JSON pela metade. Sem isso, um upload grande (index.json cresce com o tempo)
+// podia ser lido no meio da escrita por outra requisicao simultanea, quebrando
+// com "Unexpected end of JSON input".
+async function writeJsonAtomic(targetFile, data) {
+  await fs.mkdir(path.dirname(targetFile), { recursive: true });
+
+  const tempFile = `${targetFile}.tmp-${process.pid}-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+
+  await fs.writeFile(tempFile, JSON.stringify(data, null, 2), "utf8");
+  await fs.rename(tempFile, targetFile);
 }
 
 async function countCapeFiles() {
