@@ -355,24 +355,38 @@ h2.section-title .bar{
   color:var(--danger);
   font-weight:700;
 }
+.nav-left{
+  display:flex;
+  align-items:center;
+  gap:14px;
+  flex-wrap:wrap;
+}
 .lang-switch{
   display:flex;
-  gap:6px;
+  gap:4px;
   flex-wrap:wrap;
-  justify-content:center;
+  padding-left:12px;
+  border-left:1px solid var(--border);
 }
 .lang-switch button{
-  padding:6px 12px;
-  border-radius:999px;
-  border:1px solid var(--border);
-  background:var(--surface-2);
-  color:var(--text-muted);
-  font-size:13px;
-  font-weight:600;
+  width:28px;height:28px;
+  padding:0;
+  border-radius:8px;
+  border:1px solid transparent;
+  background:transparent;
+  font-size:15px;
+  line-height:1;
   cursor:pointer;
+  opacity:.6;
+  transition:.15s;
+  display:flex;align-items:center;justify-content:center;
+}
+.lang-switch button:hover{
+  opacity:1;
+  background:var(--surface-2);
 }
 .lang-switch button.active{
-  color:var(--accent);
+  opacity:1;
   border-color:rgba(49,183,255,.4);
   background:rgba(49,183,255,.1);
 }
@@ -452,6 +466,7 @@ h2.section-title .bar{
     row-gap:10px;
     padding:12px 16px;
   }
+  .nav-left{justify-content:center;}
   .nav-links{
     order:1;
     width:100%;
@@ -459,8 +474,6 @@ h2.section-title .bar{
   }
   .container{padding:32px 16px 60px;}
   .download-row{flex-direction:column;align-items:stretch;}
-  .lang-switch{gap:5px;}
-  .lang-switch button{padding:6px 10px;font-size:12px;}
 }
 `;
 
@@ -478,18 +491,78 @@ ${extraHead}
 </head>
 <body>
 <nav class="nav">
-  <a class="nav-brand" href="/">
-    <img class="logo-img" src="/assets/logo.png" alt="AdaptiveCaps">
-    <span class="brand-text">AdaptiveCaps</span>
-  </a>
+  <div class="nav-left">
+    <a class="nav-brand" href="/">
+      <img class="logo-img" src="/assets/logo.png" alt="AdaptiveCaps">
+      <span class="brand-text">AdaptiveCaps</span>
+    </a>
+    <div class="lang-switch" id="lang-switch">
+      <button data-lang="pt-BR" title="Portugues" aria-label="Portugues">&#127463;&#127479;</button>
+      <button data-lang="en" title="English" aria-label="English">&#127482;&#127480;</button>
+      <button data-lang="es" title="Espanol" aria-label="Espanol">&#127466;&#127480;</button>
+      <button data-lang="fr" title="Francais" aria-label="Francais">&#127467;&#127479;</button>
+      <button data-lang="de" title="Deutsch" aria-label="Deutsch">&#127465;&#127466;</button>
+    </div>
+  </div>
   <div class="nav-links" id="nav-links">
     <span class="nav-indicator" id="nav-indicator"></span>
-    <a href="/" ${activeNav === "home" ? 'class="active"' : ""}>Inicio</a>
-    <a href="/status" ${activeNav === "status" ? 'class="active"' : ""}>Status</a>
-    <a href="/capes" ${activeNav === "capes" ? 'class="active"' : ""}>Galeria</a>
+    <a href="/" data-i18n="navHome" ${activeNav === "home" ? 'class="active"' : ""}>Inicio</a>
+    <a href="/status" data-i18n="navStatus" ${activeNav === "status" ? 'class="active"' : ""}>Status</a>
+    <a href="/capes" data-i18n="navGallery" ${activeNav === "capes" ? 'class="active"' : ""}>Galeria</a>
   </div>
 </nav>
 <script>
+const I18N = ${JSON.stringify(SITE_I18N)};
+const onLanguageChange = [];
+
+function applyLanguage(lang) {
+  const dict = I18N[lang] || I18N["pt-BR"];
+
+  document.querySelectorAll("[data-i18n]").forEach(function (el) {
+    const key = el.getAttribute("data-i18n");
+    if (dict[key] !== undefined) el.textContent = dict[key];
+  });
+  document.querySelectorAll("[data-i18n-feature]").forEach(function (el) {
+    const parts = el.getAttribute("data-i18n-feature").split(":");
+    const feature = dict.features && dict.features[Number(parts[0])];
+    if (feature && feature[parts[1]] !== undefined) el.textContent = feature[parts[1]];
+  });
+  document.querySelectorAll("[data-i18n-group]").forEach(function (el) {
+    const parts = el.getAttribute("data-i18n-group").split(":");
+    const group = dict.tutorialGroups && dict.tutorialGroups[Number(parts[0])];
+    if (!group) return;
+    if (parts.length === 2 && parts[1] === "groupTitle") {
+      el.textContent = group.groupTitle;
+    } else if (parts.length === 3) {
+      const step = group.steps && group.steps[Number(parts[1])];
+      if (step && step[parts[2]] !== undefined) el.textContent = step[parts[2]];
+    }
+  });
+  document.querySelectorAll("[data-i18n-rule]").forEach(function (el) {
+    const index = Number(el.getAttribute("data-i18n-rule"));
+    if (dict.rules && dict.rules[index] !== undefined) el.textContent = dict.rules[index];
+  });
+
+  document.documentElement.lang = lang;
+  document.querySelectorAll("#lang-switch button").forEach(function (btn) {
+    btn.classList.toggle("active", btn.dataset.lang === lang);
+  });
+  try { localStorage.setItem("adaptivecaps_lang", lang); } catch {}
+
+  onLanguageChange.forEach(function (cb) {
+    try { cb(lang, dict); } catch {}
+  });
+}
+
+document.querySelectorAll("#lang-switch button").forEach(function (btn) {
+  btn.addEventListener("click", function () { applyLanguage(btn.dataset.lang); });
+});
+
+try {
+  const savedLang = localStorage.getItem("adaptivecaps_lang");
+  if (savedLang && I18N[savedLang]) applyLanguage(savedLang);
+} catch {}
+
 (function () {
   var nav = document.getElementById("nav-links");
   var indicator = document.getElementById("nav-indicator");
@@ -769,17 +842,21 @@ app.get("/capes", (req, res) => {
   // banir. A acao de banir fica isolada em /admincape (exige token), assim
   // ninguem precisa (nem tem motivo pra) salvar um link com token pra ver a
   // galeria publica.
+  const t = SITE_I18N["pt-BR"];
   const body = `
 <div class="container">
   <div class="hero">
-    <h1 id="title">Galeria de Capas</h1>
-    <p>Todas as capas que os jogadores deixaram publicas.</p>
+    <h1 id="title" data-i18n="capesPageTitle">${escapeHtml(t.capesPageTitle)}</h1>
+    <p data-i18n="capesPageDesc">${escapeHtml(t.capesPageDesc)}</p>
   </div>
-  <input class="search-box" id="search" type="text" placeholder="Buscar por nome do jogador...">
-  <div id="content" class="cape-grid" style="margin-top:8px"><p class="msg center">Carregando...</p></div>
+  <input class="search-box" id="search" type="text" placeholder="${escapeHtml(t.searchPlaceholder)}">
+  <div id="content" class="cape-grid" style="margin-top:8px"><p class="msg center">${escapeHtml(t.loadingText)}</p></div>
 </div>
 <script>
+const LOCALE_MAP = { "pt-BR": "pt-BR", en: "en-US", es: "es-ES", fr: "fr-FR", de: "de-DE" };
 let allCapes = [];
+let lastQuery = "";
+let capesDict = I18N[document.documentElement.lang] || I18N["pt-BR"];
 
 function escapeHtml(value) {
   const div = document.createElement("div");
@@ -789,12 +866,12 @@ function escapeHtml(value) {
 
 async function loadCapes() {
   const content = document.getElementById("content");
-  content.innerHTML = '<p class="msg center">Carregando...</p>';
+  content.innerHTML = '<p class="msg center">' + escapeHtml(capesDict.loadingText) + '</p>';
 
   try {
     const response = await fetch("/api/v1/capes/gallery");
     if (!response.ok) {
-      content.innerHTML = '<p class="msg center">Falha ao carregar (status ' + response.status + ').</p>';
+      content.innerHTML = '<p class="msg center">' + escapeHtml(capesDict.errorLoadingText) + response.status + ').</p>';
       return;
     }
 
@@ -802,21 +879,23 @@ async function loadCapes() {
     allCapes = data.capes || [];
     renderCapes(allCapes);
   } catch (error) {
-    content.innerHTML = '<p class="msg center">Erro ao carregar: ' + escapeHtml(error.message) + '</p>';
+    content.innerHTML = '<p class="msg center">Erro: ' + escapeHtml(error.message) + '</p>';
   }
 }
 
 function renderCapes(capes) {
-  document.getElementById("title").textContent = "Galeria de Capas (" + capes.length + ")";
+  document.getElementById("title").textContent = capesDict.capesPageTitle + " (" + capes.length + ")";
   const content = document.getElementById("content");
 
   if (capes.length === 0) {
-    content.innerHTML = '<p class="msg center">Nenhuma capa encontrada.</p>';
+    content.innerHTML = '<p class="msg center">' + escapeHtml(capesDict.noneFoundText) + '</p>';
     return;
   }
 
+  const locale = LOCALE_MAP[document.documentElement.lang] || "pt-BR";
+
   content.innerHTML = capes.map(function (entry) {
-    const updated = entry.updatedAt ? new Date(entry.updatedAt).toLocaleString("pt-BR") : "Desconhecido";
+    const updated = entry.updatedAt ? new Date(entry.updatedAt).toLocaleString(locale) : capesDict.unknownDate;
     const imageUrl = entry.hasOriginal ? "/original-image/" + entry.uuid : "/cape-image/" + entry.uuid + ".png";
     return (
       '<div class="card cape-card">' +
@@ -824,19 +903,28 @@ function renderCapes(capes) {
       '<img src="' + imageUrl + '" alt="Cape ' + escapeHtml(entry.username || entry.uuid) + '" loading="lazy">' +
       "</a>" +
       "<h3>" + escapeHtml(entry.username || "unknown") + "</h3>" +
-      '<p class="muted">Atualizada: ' + escapeHtml(updated) + "</p>" +
+      '<p class="muted">' + escapeHtml(capesDict.updatedLabel) + escapeHtml(updated) + "</p>" +
       '<p class="hash">' + escapeHtml(String(entry.hash || "").slice(0, 12)) + "...</p>" +
       "</div>"
     );
   }).join("");
 }
 
-document.getElementById("search").addEventListener("input", function (event) {
-  const query = event.target.value.trim().toLowerCase();
-  const filtered = query
-    ? allCapes.filter(entry => String(entry.username || "").toLowerCase().includes(query))
+function currentFiltered() {
+  return lastQuery
+    ? allCapes.filter(entry => String(entry.username || "").toLowerCase().includes(lastQuery))
     : allCapes;
-  renderCapes(filtered);
+}
+
+document.getElementById("search").addEventListener("input", function (event) {
+  lastQuery = event.target.value.trim().toLowerCase();
+  renderCapes(currentFiltered());
+});
+
+onLanguageChange.push(function (lang, dict) {
+  capesDict = dict;
+  document.getElementById("search").placeholder = dict.searchPlaceholder;
+  renderCapes(currentFiltered());
 });
 
 loadCapes();
@@ -2243,30 +2331,31 @@ function formatUptime(totalSeconds) {
 }
 
 function renderStatusPage(stats) {
+  const t = SITE_I18N["pt-BR"];
   const body = `
 <div class="container">
   <div class="hero">
-    <h1>Status do AdaptiveCaps</h1>
-    <p>Informacoes em tempo real do servidor que sincroniza as capas do AdaptiveCaps.</p>
+    <h1 data-i18n="statusPageTitle">${escapeHtml(t.statusPageTitle)}</h1>
+    <p data-i18n="statusPageDesc">${escapeHtml(t.statusPageDesc)}</p>
   </div>
-  <h2 class="section-title"><span class="bar"></span>Visao geral</h2>
+  <h2 class="section-title"><span class="bar"></span><span data-i18n="statsTitle">${escapeHtml(t.statsTitle)}</span></h2>
   <div class="stat-grid">
-    <div class="card stat-tile"><div class="value">Online</div><div class="label">Status</div></div>
-    <div class="card stat-tile"><div class="value">${escapeHtml(stats.version)}</div><div class="label">Versao</div></div>
-    <div class="card stat-tile"><div class="value">${escapeHtml(formatUptime(stats.uptimeSeconds))}</div><div class="label">Uptime</div></div>
-    <div class="card stat-tile"><div class="value">${stats.totalPlayers}</div><div class="label">Jogadores registrados</div></div>
-    <div class="card stat-tile"><div class="value">${stats.visibleCapes}</div><div class="label">Capas visiveis</div></div>
-    <div class="card stat-tile"><div class="value">${stats.totalCapeFiles}</div><div class="label">Arquivos de capa</div></div>
-    <div class="card stat-tile"><div class="value">${stats.bannedPlayers}</div><div class="label">Jogadores banidos</div></div>
+    <div class="card stat-tile"><div class="value" data-i18n="statOnline">${escapeHtml(t.statOnline)}</div><div class="label">Status</div></div>
+    <div class="card stat-tile"><div class="value">${escapeHtml(stats.version)}</div><div class="label" data-i18n="statVersion">${escapeHtml(t.statVersion)}</div></div>
+    <div class="card stat-tile"><div class="value">${escapeHtml(formatUptime(stats.uptimeSeconds))}</div><div class="label" data-i18n="statUptime">${escapeHtml(t.statUptime)}</div></div>
+    <div class="card stat-tile"><div class="value">${stats.totalPlayers}</div><div class="label" data-i18n="statPlayers">${escapeHtml(t.statPlayers)}</div></div>
+    <div class="card stat-tile"><div class="value">${stats.visibleCapes}</div><div class="label" data-i18n="statCapes">${escapeHtml(t.statCapes)}</div></div>
+    <div class="card stat-tile"><div class="value">${stats.totalCapeFiles}</div><div class="label" data-i18n="statFiles">${escapeHtml(t.statFiles)}</div></div>
+    <div class="card stat-tile"><div class="value">${stats.bannedPlayers}</div><div class="label" data-i18n="statBanned">${escapeHtml(t.statBanned)}</div></div>
   </div>
   <div class="center" style="margin-top:36px">
-    <a class="btn btn-outline" href="/capes">Ver galeria de capas</a>
+    <a class="btn btn-outline" href="/capes" data-i18n="viewGalleryBtn">${escapeHtml(t.viewGalleryBtn)}</a>
   </div>
 </div>`;
   return pageShell({ title: "AdaptiveCaps - Status", activeNav: "status", body });
 }
 
-const HOME_I18N = {
+const SITE_I18N = {
   "pt-BR": {
     heroBadge: "Sincronizacao de capas em nuvem",
     heroTitle: "AdaptiveCaps",
@@ -2343,7 +2432,24 @@ const HOME_I18N = {
     contactDesc: "Duvidas, sugestoes ou problemas? Me chama no Discord.",
     contactCopy: "Copiar usuario",
     contactCopied: "Copiado!",
-    footer: "AdaptiveCaps Relay"
+    footer: "AdaptiveCaps Relay",
+    navHome: "Inicio",
+    navStatus: "Status",
+    navGallery: "Galeria",
+    statusPageTitle: "Status do AdaptiveCaps",
+    statusPageDesc: "Informacoes em tempo real do servidor que sincroniza as capas do AdaptiveCaps.",
+    statVersion: "Versao",
+    statUptime: "Uptime",
+    statFiles: "Arquivos de capa",
+    viewGalleryBtn: "Ver galeria de capas",
+    capesPageTitle: "Galeria de Capas",
+    capesPageDesc: "Todas as capas que os jogadores deixaram publicas.",
+    searchPlaceholder: "Buscar por nome do jogador...",
+    loadingText: "Carregando...",
+    errorLoadingText: "Falha ao carregar (status ",
+    noneFoundText: "Nenhuma capa encontrada.",
+    updatedLabel: "Atualizada: ",
+    unknownDate: "Desconhecido"
   },
   en: {
     heroBadge: "Cloud cape sync",
@@ -2421,7 +2527,24 @@ const HOME_I18N = {
     contactDesc: "Questions, suggestions, or issues? Message me on Discord.",
     contactCopy: "Copy username",
     contactCopied: "Copied!",
-    footer: "AdaptiveCaps Relay"
+    footer: "AdaptiveCaps Relay",
+    navHome: "Home",
+    navStatus: "Status",
+    navGallery: "Gallery",
+    statusPageTitle: "AdaptiveCaps Status",
+    statusPageDesc: "Real-time info about the server that syncs AdaptiveCaps capes.",
+    statVersion: "Version",
+    statUptime: "Uptime",
+    statFiles: "Cape files",
+    viewGalleryBtn: "See cape gallery",
+    capesPageTitle: "Cape Gallery",
+    capesPageDesc: "All the capes players have made public.",
+    searchPlaceholder: "Search by player name...",
+    loadingText: "Loading...",
+    errorLoadingText: "Failed to load (status ",
+    noneFoundText: "No capes found.",
+    updatedLabel: "Updated: ",
+    unknownDate: "Unknown"
   },
   es: {
     heroBadge: "Sincronizacion de capas en la nube",
@@ -2499,7 +2622,24 @@ const HOME_I18N = {
     contactDesc: "¿Dudas, sugerencias o problemas? Escribeme en Discord.",
     contactCopy: "Copiar usuario",
     contactCopied: "¡Copiado!",
-    footer: "AdaptiveCaps Relay"
+    footer: "AdaptiveCaps Relay",
+    navHome: "Inicio",
+    navStatus: "Status",
+    navGallery: "Galeria",
+    statusPageTitle: "Status de AdaptiveCaps",
+    statusPageDesc: "Informacion en tiempo real del servidor que sincroniza las capas de AdaptiveCaps.",
+    statVersion: "Version",
+    statUptime: "Uptime",
+    statFiles: "Archivos de capa",
+    viewGalleryBtn: "Ver galeria de capas",
+    capesPageTitle: "Galeria de Capas",
+    capesPageDesc: "Todas las capas que los jugadores hicieron publicas.",
+    searchPlaceholder: "Buscar por nombre del jugador...",
+    loadingText: "Cargando...",
+    errorLoadingText: "Fallo al cargar (status ",
+    noneFoundText: "No se encontraron capas.",
+    updatedLabel: "Actualizada: ",
+    unknownDate: "Desconocido"
   },
   fr: {
     heroBadge: "Synchronisation de capes dans le cloud",
@@ -2577,7 +2717,24 @@ const HOME_I18N = {
     contactDesc: "Questions, suggestions ou problemes ? Contactez-moi sur Discord.",
     contactCopy: "Copier le pseudo",
     contactCopied: "Copie !",
-    footer: "AdaptiveCaps Relay"
+    footer: "AdaptiveCaps Relay",
+    navHome: "Accueil",
+    navStatus: "Status",
+    navGallery: "Galerie",
+    statusPageTitle: "Status AdaptiveCaps",
+    statusPageDesc: "Informations en temps reel du serveur qui synchronise les capes AdaptiveCaps.",
+    statVersion: "Version",
+    statUptime: "Uptime",
+    statFiles: "Fichiers de cape",
+    viewGalleryBtn: "Voir la galerie de capes",
+    capesPageTitle: "Galerie de Capes",
+    capesPageDesc: "Toutes les capes que les joueurs ont rendues publiques.",
+    searchPlaceholder: "Rechercher par nom de joueur...",
+    loadingText: "Chargement...",
+    errorLoadingText: "Echec du chargement (status ",
+    noneFoundText: "Aucune cape trouvee.",
+    updatedLabel: "Mise a jour : ",
+    unknownDate: "Inconnu"
   },
   de: {
     heroBadge: "Cloud-Umhang-Synchronisierung",
@@ -2655,12 +2812,29 @@ const HOME_I18N = {
     contactDesc: "Fragen, Vorschlaege oder Probleme? Schreib mir auf Discord.",
     contactCopy: "Benutzernamen kopieren",
     contactCopied: "Kopiert!",
-    footer: "AdaptiveCaps Relay"
+    footer: "AdaptiveCaps Relay",
+    navHome: "Start",
+    navStatus: "Status",
+    navGallery: "Galerie",
+    statusPageTitle: "AdaptiveCaps Status",
+    statusPageDesc: "Echtzeit-Informationen zum Server, der die AdaptiveCaps-Umhaenge synchronisiert.",
+    statVersion: "Version",
+    statUptime: "Uptime",
+    statFiles: "Umhang-Dateien",
+    viewGalleryBtn: "Galerie ansehen",
+    capesPageTitle: "Umhang-Galerie",
+    capesPageDesc: "Alle Umhaenge, die Spieler oeffentlich gemacht haben.",
+    searchPlaceholder: "Nach Spielername suchen...",
+    loadingText: "Wird geladen...",
+    errorLoadingText: "Laden fehlgeschlagen (status ",
+    noneFoundText: "Keine Umhaenge gefunden.",
+    updatedLabel: "Aktualisiert: ",
+    unknownDate: "Unbekannt"
   }
 };
 
 function renderHomePage(stats, previewCapes) {
-  const t = HOME_I18N["pt-BR"];
+  const t = SITE_I18N["pt-BR"];
 
   const capesHtml = previewCapes.length > 0
     ? previewCapes.map(entry => {
@@ -2703,13 +2877,6 @@ function renderHomePage(stats, previewCapes) {
     <p class="msg" data-i18n="heroBadge" style="text-transform:uppercase;letter-spacing:1px;font-size:12px;font-weight:700;color:var(--accent-2)">${escapeHtml(t.heroBadge)}</p>
     <h1 data-i18n="heroTitle">${escapeHtml(t.heroTitle)}</h1>
     <p data-i18n="heroSubtitle">${escapeHtml(t.heroSubtitle)}</p>
-    <div class="lang-switch" id="lang-switch" style="margin-top:20px">
-      <button data-lang="pt-BR" class="active">PT</button>
-      <button data-lang="en">EN</button>
-      <button data-lang="es">ES</button>
-      <button data-lang="fr">FR</button>
-      <button data-lang="de">DE</button>
-    </div>
     <div class="download-row">
       <a class="btn btn-primary" href="${escapeHtml(MODRINTH_URL)}" target="_blank" rel="noopener" data-i18n="downloadModrinth">${escapeHtml(t.downloadModrinth)}</a>
       <a class="btn btn-outline" href="${escapeHtml(CURSEFORGE_URL)}" target="_blank" rel="noopener" data-i18n="downloadCurseforge">${escapeHtml(t.downloadCurseforge)}</a>
@@ -2759,50 +2926,6 @@ function renderHomePage(stats, previewCapes) {
   </div>
 </div>
 <script>
-const I18N = ${JSON.stringify(HOME_I18N)};
-
-function applyLanguage(lang) {
-  const dict = I18N[lang] || I18N["pt-BR"];
-  document.querySelectorAll("[data-i18n]").forEach(function (el) {
-    const key = el.getAttribute("data-i18n");
-    if (dict[key] !== undefined) el.textContent = dict[key];
-  });
-  document.querySelectorAll("[data-i18n-feature]").forEach(function (el) {
-    const [index, field] = el.getAttribute("data-i18n-feature").split(":");
-    const feature = dict.features && dict.features[Number(index)];
-    if (feature && feature[field] !== undefined) el.textContent = feature[field];
-  });
-  document.querySelectorAll("[data-i18n-group]").forEach(function (el) {
-    const parts = el.getAttribute("data-i18n-group").split(":");
-    const group = dict.tutorialGroups && dict.tutorialGroups[Number(parts[0])];
-    if (!group) return;
-    if (parts.length === 2 && parts[1] === "groupTitle") {
-      el.textContent = group.groupTitle;
-    } else if (parts.length === 3) {
-      const step = group.steps && group.steps[Number(parts[1])];
-      if (step && step[parts[2]] !== undefined) el.textContent = step[parts[2]];
-    }
-  });
-  document.querySelectorAll("[data-i18n-rule]").forEach(function (el) {
-    const index = Number(el.getAttribute("data-i18n-rule"));
-    if (dict.rules && dict.rules[index] !== undefined) el.textContent = dict.rules[index];
-  });
-  document.documentElement.lang = lang;
-  document.querySelectorAll("#lang-switch button").forEach(function (btn) {
-    btn.classList.toggle("active", btn.dataset.lang === lang);
-  });
-  try { localStorage.setItem("adaptivecaps_lang", lang); } catch {}
-}
-
-document.querySelectorAll("#lang-switch button").forEach(function (btn) {
-  btn.addEventListener("click", function () { applyLanguage(btn.dataset.lang); });
-});
-
-try {
-  const saved = localStorage.getItem("adaptivecaps_lang");
-  if (saved && I18N[saved]) applyLanguage(saved);
-} catch {}
-
 const copyBtn = document.getElementById("copy-discord-btn");
 if (copyBtn) {
   copyBtn.addEventListener("click", async function () {
