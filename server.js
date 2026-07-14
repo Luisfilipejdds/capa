@@ -2802,18 +2802,29 @@ if (copyBtn) {
   copyBtn.addEventListener("click", async function () {
     const username = document.getElementById("discord-username").textContent;
     const originalText = copyBtn.textContent;
+    let copied = false;
+
     try {
       await navigator.clipboard.writeText(username);
+      copied = true;
     } catch {
-      const helper = document.createElement("textarea");
-      helper.value = username;
-      document.body.appendChild(helper);
-      helper.select();
-      document.execCommand("copy");
-      document.body.removeChild(helper);
+      try {
+        const helper = document.createElement("textarea");
+        helper.value = username;
+        helper.style.position = "fixed";
+        helper.style.opacity = "0";
+        document.body.appendChild(helper);
+        helper.focus();
+        helper.select();
+        copied = document.execCommand("copy");
+        document.body.removeChild(helper);
+      } catch {
+        copied = false;
+      }
     }
+
     const dict = I18N[document.documentElement.lang] || I18N["pt-BR"];
-    copyBtn.textContent = dict.contactCopied || "Copiado!";
+    copyBtn.textContent = copied ? (dict.contactCopied || "Copiado!") : username;
     setTimeout(function () { copyBtn.textContent = originalText; }, 1800);
   });
 }
