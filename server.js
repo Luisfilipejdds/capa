@@ -35,70 +35,397 @@ const pngSignature = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a
 
 const startedAt = Date.now();
 
+const MODRINTH_URL = "https://modrinth.com/mod/adaptivecaps";
+const CURSEFORGE_URL = "https://www.curseforge.com/minecraft/mc-mods/adaptivecaps";
+
+// Design compartilhado por todas as paginas HTML do site (publico e admin),
+// pra tudo ter a mesma cara em vez de cada rota reinventar seu proprio CSS.
+const SITE_STYLES = `
+:root{
+  --bg:#0a0e16;
+  --bg-alt:#0f1520;
+  --surface:#141b28;
+  --surface-2:#1a2333;
+  --border:#232e42;
+  --text:#e8edf5;
+  --text-muted:#8b97ac;
+  --accent:#31b7ff;
+  --accent-2:#8b5cf6;
+  --success:#22c55e;
+  --danger:#ef4444;
+  --radius:16px;
+  --radius-sm:10px;
+  --shadow:0 8px 30px rgba(0,0,0,.35);
+}
+*{box-sizing:border-box;}
+body{
+  margin:0;
+  background:
+    radial-gradient(1200px 600px at 15% -10%, rgba(49,183,255,.12), transparent 60%),
+    radial-gradient(1000px 500px at 100% 0%, rgba(139,92,246,.10), transparent 55%),
+    var(--bg);
+  color:var(--text);
+  font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  min-height:100vh;
+}
+a{color:inherit;}
+.nav{
+  position:sticky;
+  top:0;
+  z-index:20;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:16px;
+  padding:16px 28px;
+  background:rgba(10,14,22,.75);
+  backdrop-filter:blur(10px);
+  border-bottom:1px solid var(--border);
+}
+.nav-brand{
+  display:flex;
+  align-items:center;
+  gap:10px;
+  font-weight:700;
+  font-size:18px;
+  text-decoration:none;
+  color:var(--text);
+}
+.nav-brand .dot{
+  width:10px;height:10px;border-radius:50%;
+  background:linear-gradient(135deg,var(--accent),var(--accent-2));
+  box-shadow:0 0 12px rgba(49,183,255,.7);
+}
+.nav-links{
+  display:flex;
+  gap:8px;
+  flex-wrap:wrap;
+}
+.nav-links a{
+  padding:8px 14px;
+  border-radius:999px;
+  font-size:14px;
+  font-weight:600;
+  text-decoration:none;
+  color:var(--text-muted);
+  border:1px solid transparent;
+  transition:.15s;
+}
+.nav-links a:hover{
+  color:var(--text);
+  background:var(--surface-2);
+}
+.nav-links a.active{
+  color:var(--accent);
+  background:rgba(49,183,255,.1);
+  border-color:rgba(49,183,255,.3);
+}
+.container{
+  max-width:1080px;
+  margin:0 auto;
+  padding:48px 24px 80px;
+}
+.hero{
+  text-align:center;
+  padding:36px 0 8px;
+}
+.hero h1{
+  font-size:42px;
+  margin:0 0 12px;
+  background:linear-gradient(135deg,var(--accent),var(--accent-2));
+  -webkit-background-clip:text;
+  background-clip:text;
+  color:transparent;
+}
+.hero p{
+  color:var(--text-muted);
+  font-size:16px;
+  max-width:560px;
+  margin:0 auto;
+}
+h2.section-title{
+  font-size:22px;
+  margin:56px 0 20px;
+  display:flex;
+  align-items:center;
+  gap:10px;
+}
+h2.section-title .bar{
+  width:4px;height:20px;border-radius:2px;
+  background:linear-gradient(180deg,var(--accent),var(--accent-2));
+}
+.card{
+  background:var(--surface);
+  border:1px solid var(--border);
+  border-radius:var(--radius);
+  box-shadow:var(--shadow);
+}
+.stat-grid{
+  display:grid;
+  grid-template-columns:repeat(auto-fit,minmax(150px,1fr));
+  gap:16px;
+}
+.stat-tile{
+  padding:20px;
+  text-align:center;
+}
+.stat-tile .value{
+  font-size:28px;
+  font-weight:700;
+  color:var(--accent);
+}
+.stat-tile .label{
+  margin-top:6px;
+  font-size:13px;
+  color:var(--text-muted);
+}
+.cape-grid{
+  display:grid;
+  grid-template-columns:repeat(auto-fill,minmax(170px,1fr));
+  gap:18px;
+}
+.cape-card{
+  padding:16px;
+  text-align:center;
+  transition:transform .15s, box-shadow .15s;
+}
+.cape-card:hover{
+  transform:translateY(-4px);
+  box-shadow:0 14px 34px rgba(0,0,0,.45);
+}
+.cape-card img{
+  max-width:120px;
+  image-rendering:pixelated;
+  background:var(--surface-2);
+  border-radius:10px;
+  padding:10px;
+}
+.cape-card h3{
+  font-size:15px;
+  margin:12px 0 4px;
+}
+.cape-card .muted{
+  font-size:11px;
+  color:var(--text-muted);
+  word-break:break-all;
+}
+.cape-card .hash{
+  font-size:10px;
+  color:#5b6779;
+  word-break:break-all;
+}
+.player-card{
+  padding:20px;
+  text-align:center;
+}
+.player-card h3{
+  font-size:16px;
+  margin:0 0 8px;
+}
+.btn{
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  gap:8px;
+  padding:12px 22px;
+  border-radius:999px;
+  font-weight:700;
+  font-size:14px;
+  text-decoration:none;
+  border:none;
+  cursor:pointer;
+  transition:.15s;
+}
+.btn-primary{
+  background:linear-gradient(135deg,var(--accent),var(--accent-2));
+  color:#08101c;
+}
+.btn-primary:hover{filter:brightness(1.08);}
+.btn-outline{
+  background:transparent;
+  border:1px solid var(--border);
+  color:var(--text);
+}
+.btn-outline:hover{background:var(--surface-2);}
+.btn-danger{
+  background:#c0392b;
+  color:white;
+}
+.btn-danger:hover{background:var(--danger);}
+.btn-danger:disabled,.btn-outline:disabled{
+  background:#3a4457;
+  color:#94a1b5;
+  cursor:default;
+}
+.btn-block{width:100%;}
+.download-row{
+  display:flex;
+  gap:14px;
+  flex-wrap:wrap;
+  justify-content:center;
+  margin-top:18px;
+}
+.tutorial-steps{
+  display:grid;
+  gap:14px;
+}
+.step{
+  display:flex;
+  gap:16px;
+  padding:20px;
+  align-items:flex-start;
+}
+.step .num{
+  flex:none;
+  width:34px;height:34px;
+  border-radius:50%;
+  display:flex;align-items:center;justify-content:center;
+  font-weight:700;
+  background:rgba(49,183,255,.12);
+  color:var(--accent);
+  border:1px solid rgba(49,183,255,.3);
+}
+.step h4{margin:2px 0 6px;font-size:16px;}
+.step p{margin:0;color:var(--text-muted);font-size:14px;line-height:1.5;}
+.rules-list{
+  display:grid;
+  gap:12px;
+  padding:22px;
+}
+.rules-list li{
+  display:flex;
+  gap:10px;
+  color:var(--text-muted);
+  font-size:14px;
+  line-height:1.5;
+}
+.rules-list li::before{
+  content:"—";
+  color:var(--danger);
+  font-weight:700;
+}
+.lang-switch{
+  display:flex;
+  gap:6px;
+  flex-wrap:wrap;
+  justify-content:center;
+}
+.lang-switch button{
+  padding:6px 12px;
+  border-radius:999px;
+  border:1px solid var(--border);
+  background:var(--surface-2);
+  color:var(--text-muted);
+  font-size:13px;
+  font-weight:600;
+  cursor:pointer;
+}
+.lang-switch button.active{
+  color:var(--accent);
+  border-color:rgba(49,183,255,.4);
+  background:rgba(49,183,255,.1);
+}
+.msg,.empty{color:var(--text-muted);}
+.center{text-align:center;}
+.search-box{
+  width:100%;
+  max-width:360px;
+  margin:0 auto 28px;
+  display:block;
+  padding:12px 16px;
+  border-radius:999px;
+  border:1px solid var(--border);
+  background:var(--surface);
+  color:var(--text);
+  font-size:14px;
+}
+.search-box:focus{outline:none;border-color:var(--accent);}
+.footer{
+  text-align:center;
+  color:var(--text-muted);
+  font-size:13px;
+  padding:40px 0 10px;
+}
+@media(max-width:640px){
+  .hero h1{font-size:30px;}
+  .nav{padding:14px 16px;}
+  .container{padding:32px 16px 60px;}
+}
+`;
+
+function pageShell({ title, activeNav, body, extraHead = "" }) {
+  return `
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>${title}</title>
+<style>${SITE_STYLES}</style>
+${extraHead}
+</head>
+<body>
+<nav class="nav">
+  <a class="nav-brand" href="/"><span class="dot"></span> AdaptiveCaps</a>
+  <div class="nav-links">
+    <a href="/" ${activeNav === "home" ? 'class="active"' : ""}>Inicio</a>
+    <a href="/status" ${activeNav === "status" ? 'class="active"' : ""}>Status</a>
+    <a href="/capes" ${activeNav === "capes" ? 'class="active"' : ""}>Galeria</a>
+  </div>
+</nav>
+${body}
+</body>
+</html>`;
+}
+
 app.disable("x-powered-by");
 app.set("trust proxy", true);
 app.use(express.json({ limit: `${jsonLimitBytes}b` }));
 
-app.get("/", (req, res) => {
-  return res.json(statusPayload());
+function computeStats(metadata, totalCapeFiles, storageSizeMb) {
+  const totalPlayers = Object.keys(metadata).length;
+  const visibleCapes = Object.values(metadata).filter(entry => entry?.visible === true).length;
+  return {
+    ok: true,
+    version: packageVersion,
+    uptimeSeconds: Math.floor((Date.now() - startedAt) / 1000),
+    totalPlayers,
+    visibleCapes,
+    totalCapeFiles,
+    storageSizeMb: Number(storageSizeMb)
+  };
+}
+
+app.get("/api/v1/stats", async (req, res) => {
+  try {
+    const metadata = await readIndex();
+    const totalCapeFiles = await countCapeFiles();
+    const storageSizeMb = await getStorageSizeMb();
+    return res.status(200).json(computeStats(metadata, totalCapeFiles, storageSizeMb));
+  } catch (error) {
+    return handleError(res, error);
+  }
+});
+
+app.get("/", async (req, res) => {
+  try {
+    const metadata = await readIndex();
+    const totalCapeFiles = await countCapeFiles();
+    const storageSizeMb = await getStorageSizeMb();
+    const stats = computeStats(metadata, totalCapeFiles, storageSizeMb);
+    const previewCapes = listVisibleCapes(metadata).slice(0, 8);
+    return res.type("html").send(renderHomePage(stats, previewCapes));
+  } catch (error) {
+    return handleError(res, error);
+  }
 });
 app.get("/status", async (req, res) => {
   try {
     const metadata = await readIndex();
-
-    const totalPlayers = Object.keys(metadata).length;
-
-    const visibleCapes = Object.values(metadata).filter(
-      entry => entry?.visible === true
-    ).length;
-
     const totalCapeFiles = await countCapeFiles();
     const storageSizeMb = await getStorageSizeMb();
-    
-    return res.type("html").send(`
-<!DOCTYPE html>
-<html>
-<head>
-<meta charset="utf-8">
-<title>AdaptiveCaps Status</title>
-<style>
-body{
-background:#0f1720;
-color:white;
-font-family:Arial,sans-serif;
-display:flex;
-justify-content:center;
-align-items:center;
-height:100vh;
-margin:0;
-}
-.card{
-background:#182331;
-padding:30px;
-border-radius:16px;
-width:500px;
-box-shadow:0 0 20px rgba(0,0,0,.3);
-}
-h1{
-margin-top:0;
-color:#31b7ff;
-}
-</style>
-</head>
-<body>
-<div class="card">
-<h1>AdaptiveCaps Relay</h1>
-<p>Status: Online</p>
-<p>Version: ${packageVersion}</p>
-<p>Uptime: ${Math.floor((Date.now() - startedAt) / 1000)} segundos</p>
-<p>Registered Players: ${totalPlayers}</p>
-<p>Visible Capes: ${visibleCapes}</p>
-<p>Total Cape Files: ${totalCapeFiles}</p>
-<p>Stored Data Size: ${storageSizeMb} MB</p>
-</div>
-</body>
-</html>
-    `);
+    const stats = computeStats(metadata, totalCapeFiles, storageSizeMb);
+    return res.type("html").send(renderStatusPage(stats));
   } catch (error) {
     return handleError(res, error);
   }
@@ -225,80 +552,19 @@ app.get("/capes", (req, res) => {
   // banir. A acao de banir fica isolada em /admincape (exige token), assim
   // ninguem precisa (nem tem motivo pra) salvar um link com token pra ver a
   // galeria publica.
-  return res.type("html").send(`
-<!DOCTYPE html>
-<html>
-<head>
-<meta charset="utf-8">
-<title>AdaptiveCaps Gallery</title>
-<style>
-body{
-background:#0f1720;
-color:white;
-font-family:Arial,sans-serif;
-margin:0;
-padding:30px;
-}
-h1{
-color:#31b7ff;
-}
-.grid{
-display:grid;
-grid-template-columns:repeat(auto-fill,minmax(180px,1fr));
-gap:20px;
-}
-.cape-card{
-background:#182331;
-padding:18px;
-border-radius:14px;
-text-align:center;
-box-shadow:0 0 20px rgba(0,0,0,.25);
-}
-.cape-card img{
-max-width:128px;
-image-rendering:pixelated;
-background:#263548;
-border-radius:8px;
-padding:10px;
-}
-.cape-card h2{
-font-size:18px;
-margin:12px 0 6px;
-}
-.cape-card p{
-font-size:11px;
-color:#aeb9c8;
-word-break:break-all;
-}
-.muted{
-color:#aeb9c8;
-font-size:12px;
-}
-
-.hash{
-font-size:10px;
-color:#718096;
-word-break:break-all;
-}
-
-.cape-card a{
-display:inline-block;
-}
-
-.cape-card img:hover{
-transform:scale(1.08);
-transition:.15s;
-}
-
-.msg{
-color:#aeb9c8;
-}
-</style>
-</head>
-<body>
-<h1 id="title">AdaptiveCaps Gallery</h1>
-<div id="content" class="grid"><p class="msg">Carregando...</p></div>
+  const body = `
+<div class="container">
+  <div class="hero">
+    <h1 id="title">Galeria de Capas</h1>
+    <p>Todas as capas que os jogadores deixaram publicas.</p>
+  </div>
+  <input class="search-box" id="search" type="text" placeholder="Buscar por nome do jogador...">
+  <div id="content" class="cape-grid" style="margin-top:8px"><p class="msg center">Carregando...</p></div>
+  <div class="footer">AdaptiveCaps Relay</div>
+</div>
 <script>
+let allCapes = [];
+
 function escapeHtml(value) {
   const div = document.createElement("div");
   div.textContent = String(value ?? "");
@@ -307,151 +573,72 @@ function escapeHtml(value) {
 
 async function loadCapes() {
   const content = document.getElementById("content");
-  content.innerHTML = '<p class="msg">Carregando...</p>';
+  content.innerHTML = '<p class="msg center">Carregando...</p>';
 
   try {
     const response = await fetch("/api/v1/capes/gallery");
     if (!response.ok) {
-      content.innerHTML = '<p class="msg">Falha ao carregar (status ' + response.status + ').</p>';
+      content.innerHTML = '<p class="msg center">Falha ao carregar (status ' + response.status + ').</p>';
       return;
     }
 
     const data = await response.json();
-    renderCapes(data.capes || []);
+    allCapes = data.capes || [];
+    renderCapes(allCapes);
   } catch (error) {
-    content.innerHTML = '<p class="msg">Erro ao carregar: ' + escapeHtml(error.message) + '</p>';
+    content.innerHTML = '<p class="msg center">Erro ao carregar: ' + escapeHtml(error.message) + '</p>';
   }
 }
 
 function renderCapes(capes) {
-  document.getElementById("title").textContent = "AdaptiveCaps Gallery (" + capes.length + ")";
+  document.getElementById("title").textContent = "Galeria de Capas (" + capes.length + ")";
   const content = document.getElementById("content");
 
   if (capes.length === 0) {
-    content.innerHTML = '<p class="msg">Nenhuma capa visivel encontrada.</p>';
+    content.innerHTML = '<p class="msg center">Nenhuma capa encontrada.</p>';
     return;
   }
 
   content.innerHTML = capes.map(function (entry) {
     const updated = entry.updatedAt ? new Date(entry.updatedAt).toLocaleString("pt-BR") : "Desconhecido";
-    const originalInfo = entry.hasOriginal
-      ? (entry.originalFormat || "unknown").toUpperCase() + " • " + (entry.originalSize || 0) + " bytes"
-      : "Sem original salvo";
     const imageUrl = entry.hasOriginal ? "/original-image/" + entry.uuid : "/cape-image/" + entry.uuid + ".png";
     return (
-      '<div class="cape-card">' +
+      '<div class="card cape-card">' +
       '<a href="' + imageUrl + '" target="_blank">' +
-      '<img src="' + imageUrl + '" alt="Cape ' + escapeHtml(entry.username || entry.uuid) + '">' +
+      '<img src="' + imageUrl + '" alt="Cape ' + escapeHtml(entry.username || entry.uuid) + '" loading="lazy">' +
       "</a>" +
-      "<h2>" + escapeHtml(entry.username || "unknown") + "</h2>" +
+      "<h3>" + escapeHtml(entry.username || "unknown") + "</h3>" +
       '<p class="muted">Atualizada: ' + escapeHtml(updated) + "</p>" +
-      '<p class="muted">Original: ' + escapeHtml(originalInfo) + "</p>" +
-      '<p class="hash">Hash: ' + escapeHtml(String(entry.hash || "").slice(0, 12)) + "...</p>" +
+      '<p class="hash">' + escapeHtml(String(entry.hash || "").slice(0, 12)) + "...</p>" +
       "</div>"
     );
   }).join("");
 }
 
+document.getElementById("search").addEventListener("input", function (event) {
+  const query = event.target.value.trim().toLowerCase();
+  const filtered = query
+    ? allCapes.filter(entry => String(entry.username || "").toLowerCase().includes(query))
+    : allCapes;
+  renderCapes(filtered);
+});
+
 loadCapes();
-</script>
-</body>
-</html>
-    `);
+</script>`;
+  return res.type("html").send(pageShell({ title: "AdaptiveCaps - Galeria", activeNav: "capes", body }));
 });
 app.get("/admincape", (req, res) => {
   // Mesmo padrao de /banned: o token de admin nunca fica no HTML nem na URL,
   // e pedido via prompt() e mantido so em memoria no navegador.
-  return res.type("html").send(`
-<!DOCTYPE html>
-<html>
-<head>
-<meta charset="utf-8">
-<title>AdaptiveCaps Admin - Capas</title>
-<style>
-body{
-background:#0f1720;
-color:white;
-font-family:Arial,sans-serif;
-margin:0;
-padding:30px;
-}
-h1{
-color:#31b7ff;
-}
-.grid{
-display:grid;
-grid-template-columns:repeat(auto-fill,minmax(180px,1fr));
-gap:20px;
-}
-.cape-card{
-background:#182331;
-padding:18px;
-border-radius:14px;
-text-align:center;
-box-shadow:0 0 20px rgba(0,0,0,.25);
-}
-.cape-card img{
-max-width:128px;
-image-rendering:pixelated;
-background:#263548;
-border-radius:8px;
-padding:10px;
-}
-.cape-card h2{
-font-size:18px;
-margin:12px 0 6px;
-}
-.cape-card p{
-font-size:11px;
-color:#aeb9c8;
-word-break:break-all;
-}
-.muted{
-color:#aeb9c8;
-font-size:12px;
-}
-
-.hash{
-font-size:10px;
-color:#718096;
-word-break:break-all;
-}
-
-.cape-card a{
-display:inline-block;
-}
-
-.cape-card img:hover{
-transform:scale(1.08);
-transition:.15s;
-}
-
-.ban-btn{
-margin-top:10px;
-background:#c0392b;
-color:white;
-border:none;
-padding:8px 14px;
-border-radius:8px;
-font-size:12px;
-cursor:pointer;
-}
-
-.ban-btn:hover{
-background:#e74c3c;
-}
-.ban-btn:disabled{
-background:#4a5568;
-cursor:default;
-}
-.msg{
-color:#aeb9c8;
-}
-</style>
-</head>
-<body>
-<h1 id="title">AdaptiveCaps Admin - Capas</h1>
-<div id="content" class="grid"><p class="msg">Carregando...</p></div>
+  const body = `
+<div class="container">
+  <div class="hero">
+    <h1 id="title">Admin - Capas</h1>
+    <p>Area restrita. Requer o token de admin para listar e banir capas.</p>
+  </div>
+  <div id="content" class="cape-grid"><p class="msg center">Carregando...</p></div>
+  <div class="footer">AdaptiveCaps Relay</div>
+</div>
 <script>
 let adminToken = "";
 
@@ -464,38 +651,38 @@ function escapeHtml(value) {
 async function loadCapes() {
   adminToken = window.prompt("Token de admin:") || "";
   if (!adminToken) {
-    document.getElementById("content").innerHTML = '<p class="msg">Token nao informado.</p>';
+    document.getElementById("content").innerHTML = '<p class="msg center">Token nao informado.</p>';
     return;
   }
 
   const content = document.getElementById("content");
-  content.innerHTML = '<p class="msg">Carregando...</p>';
+  content.innerHTML = '<p class="msg center">Carregando...</p>';
 
   try {
     const response = await fetch("/api/v1/admin/capes", { headers: { "x-admin-token": adminToken } });
     if (response.status === 403) {
-      content.innerHTML = '<p class="msg">Token invalido.</p>';
+      content.innerHTML = '<p class="msg center">Token invalido.</p>';
       adminToken = "";
       return;
     }
     if (!response.ok) {
-      content.innerHTML = '<p class="msg">Falha ao carregar (status ' + response.status + ').</p>';
+      content.innerHTML = '<p class="msg center">Falha ao carregar (status ' + response.status + ').</p>';
       return;
     }
 
     const data = await response.json();
     renderCapes(data.capes || []);
   } catch (error) {
-    content.innerHTML = '<p class="msg">Erro ao carregar: ' + escapeHtml(error.message) + '</p>';
+    content.innerHTML = '<p class="msg center">Erro ao carregar: ' + escapeHtml(error.message) + '</p>';
   }
 }
 
 function renderCapes(capes) {
-  document.getElementById("title").textContent = "AdaptiveCaps Admin - Capas (" + capes.length + ")";
+  document.getElementById("title").textContent = "Admin - Capas (" + capes.length + ")";
   const content = document.getElementById("content");
 
   if (capes.length === 0) {
-    content.innerHTML = '<p class="msg">Nenhuma capa visivel encontrada.</p>';
+    content.innerHTML = '<p class="msg center">Nenhuma capa visivel encontrada.</p>';
     return;
   }
 
@@ -506,20 +693,20 @@ function renderCapes(capes) {
       : "Sem original salvo";
     const imageUrl = entry.hasOriginal ? "/original-image/" + entry.uuid : "/cape-image/" + entry.uuid + ".png";
     return (
-      '<div class="cape-card">' +
+      '<div class="card cape-card">' +
       '<a href="' + imageUrl + '" target="_blank">' +
       '<img src="' + imageUrl + '" alt="Cape ' + escapeHtml(entry.username || entry.uuid) + '">' +
       "</a>" +
-      "<h2>" + escapeHtml(entry.username || "unknown") + "</h2>" +
+      "<h3>" + escapeHtml(entry.username || "unknown") + "</h3>" +
       '<p class="muted">Atualizada: ' + escapeHtml(updated) + "</p>" +
       '<p class="muted">Original: ' + escapeHtml(originalInfo) + "</p>" +
-      '<p class="hash">Hash: ' + escapeHtml(String(entry.hash || "").slice(0, 12)) + "...</p>" +
-      '<button class="ban-btn" data-uuid="' + escapeHtml(entry.uuid) + '" data-name="' + escapeHtml(entry.username || entry.uuid) + '">Banir capa</button>' +
+      '<p class="hash">' + escapeHtml(String(entry.hash || "").slice(0, 12)) + "...</p>" +
+      '<button class="btn btn-danger btn-block" style="margin-top:12px" data-uuid="' + escapeHtml(entry.uuid) + '" data-name="' + escapeHtml(entry.username || entry.uuid) + '">Banir capa</button>' +
       "</div>"
     );
   }).join("");
 
-  content.querySelectorAll(".ban-btn").forEach(function (btn) {
+  content.querySelectorAll("button[data-uuid]").forEach(function (btn) {
     btn.addEventListener("click", function () {
       banCape(btn.dataset.uuid, btn.dataset.name, btn);
     });
@@ -552,10 +739,8 @@ async function banCape(uuid, name, btn) {
 }
 
 loadCapes();
-</script>
-</body>
-</html>
-    `);
+</script>`;
+  return res.type("html").send(pageShell({ title: "AdaptiveCaps Admin - Capas", activeNav: "", body }));
 });
 app.get("/api/v1/admin/banned", async (req, res) => {
   try {
@@ -580,74 +765,15 @@ app.get("/banned", (req, res) => {
   // (ficaria no historico do navegador e nos logs de acesso). O proprio admin
   // digita o token no navegador via prompt(); ele so existe em memoria do lado
   // do cliente e e enviado apenas como header em cada chamada.
-  return res.type("html").send(`
-<!DOCTYPE html>
-<html>
-<head>
-<meta charset="utf-8">
-<title>AdaptiveCaps - Banidos</title>
-<style>
-body{
-background:#0f1720;
-color:white;
-font-family:Arial,sans-serif;
-margin:0;
-padding:30px;
-}
-h1{
-color:#31b7ff;
-}
-.grid{
-display:grid;
-grid-template-columns:repeat(auto-fill,minmax(220px,1fr));
-gap:20px;
-}
-.player-card{
-background:#182331;
-padding:18px;
-border-radius:14px;
-text-align:center;
-box-shadow:0 0 20px rgba(0,0,0,.25);
-}
-.player-card h2{
-font-size:18px;
-margin:0 0 8px;
-}
-.muted{
-color:#aeb9c8;
-font-size:12px;
-}
-.hash{
-font-size:11px;
-color:#718096;
-word-break:break-all;
-margin:4px 0;
-}
-.unban-btn{
-margin-top:10px;
-background:#1f9d55;
-color:white;
-border:none;
-padding:8px 14px;
-border-radius:8px;
-font-size:12px;
-cursor:pointer;
-}
-.unban-btn:hover{
-background:#27ae60;
-}
-.unban-btn:disabled{
-background:#4a5568;
-cursor:default;
-}
-.empty, .msg{
-color:#aeb9c8;
-}
-</style>
-</head>
-<body>
-<h1 id="title">AdaptiveCaps - Jogadores banidos</h1>
-<div id="content" class="grid"><p class="msg">Carregando...</p></div>
+  const body = `
+<div class="container">
+  <div class="hero">
+    <h1 id="title">Jogadores Banidos</h1>
+    <p>Area restrita. Requer o token de admin para listar e desbanir jogadores.</p>
+  </div>
+  <div id="content" class="cape-grid"><p class="msg center">Carregando...</p></div>
+  <div class="footer">AdaptiveCaps Relay</div>
+</div>
 <script>
 let adminToken = "";
 
@@ -660,54 +786,54 @@ function escapeHtml(value) {
 async function loadBanned() {
   adminToken = window.prompt("Token de admin:") || "";
   if (!adminToken) {
-    document.getElementById("content").innerHTML = '<p class="msg">Token nao informado.</p>';
+    document.getElementById("content").innerHTML = '<p class="msg center">Token nao informado.</p>';
     return;
   }
 
   const content = document.getElementById("content");
-  content.innerHTML = '<p class="msg">Carregando...</p>';
+  content.innerHTML = '<p class="msg center">Carregando...</p>';
 
   try {
     const response = await fetch("/api/v1/admin/banned", { headers: { "x-admin-token": adminToken } });
     if (response.status === 403) {
-      content.innerHTML = '<p class="msg">Token invalido.</p>';
+      content.innerHTML = '<p class="msg center">Token invalido.</p>';
       adminToken = "";
       return;
     }
     if (!response.ok) {
-      content.innerHTML = '<p class="msg">Falha ao carregar (status ' + response.status + ').</p>';
+      content.innerHTML = '<p class="msg center">Falha ao carregar (status ' + response.status + ').</p>';
       return;
     }
 
     const data = await response.json();
     renderBanned(data.banned || []);
   } catch (error) {
-    content.innerHTML = '<p class="msg">Erro ao carregar: ' + escapeHtml(error.message) + '</p>';
+    content.innerHTML = '<p class="msg center">Erro ao carregar: ' + escapeHtml(error.message) + '</p>';
   }
 }
 
 function renderBanned(banned) {
-  document.getElementById("title").textContent = "AdaptiveCaps - Jogadores banidos (" + banned.length + ")";
+  document.getElementById("title").textContent = "Jogadores Banidos (" + banned.length + ")";
   const content = document.getElementById("content");
 
   if (banned.length === 0) {
-    content.innerHTML = '<p class="empty">Nenhum jogador banido no momento.</p>';
+    content.innerHTML = '<p class="empty center">Nenhum jogador banido no momento.</p>';
     return;
   }
 
   content.innerHTML = banned.map(function (entry) {
     const bannedAt = entry.bannedAt ? new Date(entry.bannedAt).toLocaleString("pt-BR") : "Desconhecido";
     return (
-      '<div class="player-card">' +
-      "<h2>" + escapeHtml(entry.username || "unknown") + "</h2>" +
+      '<div class="card player-card">' +
+      "<h3>" + escapeHtml(entry.username || "unknown") + "</h3>" +
       '<p class="hash">' + escapeHtml(entry.uuid) + "</p>" +
       '<p class="muted">Banido em: ' + escapeHtml(bannedAt) + "</p>" +
-      '<button class="unban-btn" data-uuid="' + escapeHtml(entry.uuid) + '" data-name="' + escapeHtml(entry.username || entry.uuid) + '">Desbanir</button>' +
+      '<button class="btn btn-outline btn-block" style="margin-top:12px;border-color:#1f9d55;color:#3ddc84" data-uuid="' + escapeHtml(entry.uuid) + '" data-name="' + escapeHtml(entry.username || entry.uuid) + '">Desbanir</button>' +
       "</div>"
     );
   }).join("");
 
-  content.querySelectorAll(".unban-btn").forEach(function (btn) {
+  content.querySelectorAll("button[data-uuid]").forEach(function (btn) {
     btn.addEventListener("click", function () {
       unbanPlayer(btn.dataset.uuid, btn.dataset.name, btn);
     });
@@ -740,10 +866,8 @@ async function unbanPlayer(uuid, name, btn) {
 }
 
 loadBanned();
-</script>
-</body>
-</html>
-    `);
+</script>`;
+  return res.type("html").send(pageShell({ title: "AdaptiveCaps - Banidos", activeNav: "", body }));
 });
 app.get("/api/v1/health", (req, res) => {
   return res.json(healthPayload());
@@ -1780,6 +1904,326 @@ async function convertAiImageToCape(imageBuffer) {
 
   return capePng;
 }
+function formatUptime(totalSeconds) {
+  const days = Math.floor(totalSeconds / 86400);
+  const hours = Math.floor((totalSeconds % 86400) / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  if (days > 0) return `${days}d ${hours}h`;
+  if (hours > 0) return `${hours}h ${minutes}m`;
+  return `${minutes}m`;
+}
+
+function renderStatusPage(stats) {
+  const body = `
+<div class="container">
+  <div class="hero">
+    <h1>Status do Relay</h1>
+    <p>Informacoes em tempo real do servidor que sincroniza as capas do AdaptiveCaps.</p>
+  </div>
+  <h2 class="section-title"><span class="bar"></span>Visao geral</h2>
+  <div class="stat-grid">
+    <div class="card stat-tile"><div class="value">Online</div><div class="label">Status</div></div>
+    <div class="card stat-tile"><div class="value">${escapeHtml(stats.version)}</div><div class="label">Versao</div></div>
+    <div class="card stat-tile"><div class="value">${escapeHtml(formatUptime(stats.uptimeSeconds))}</div><div class="label">Uptime</div></div>
+    <div class="card stat-tile"><div class="value">${stats.totalPlayers}</div><div class="label">Jogadores registrados</div></div>
+    <div class="card stat-tile"><div class="value">${stats.visibleCapes}</div><div class="label">Capas visiveis</div></div>
+    <div class="card stat-tile"><div class="value">${stats.totalCapeFiles}</div><div class="label">Arquivos de capa</div></div>
+    <div class="card stat-tile"><div class="value">${stats.storageSizeMb} MB</div><div class="label">Espaco usado</div></div>
+  </div>
+  <div class="center" style="margin-top:36px">
+    <a class="btn btn-outline" href="/capes">Ver galeria de capas</a>
+  </div>
+  <div class="footer">AdaptiveCaps Relay</div>
+</div>`;
+  return pageShell({ title: "AdaptiveCaps - Status", activeNav: "status", body });
+}
+
+const HOME_I18N = {
+  "pt-BR": {
+    heroBadge: "Sincronizacao de capas em nuvem",
+    heroTitle: "AdaptiveCaps",
+    heroSubtitle: "Escolha, crie ou gere com IA a capa do seu personagem, e leve ela pra qualquer servidor que voce jogar.",
+    statsTitle: "Em numeros",
+    statOnline: "Online",
+    statPlayers: "Jogadores",
+    statCapes: "Capas visiveis",
+    statStorage: "Dados armazenados",
+    galleryTitle: "Algumas capas da comunidade",
+    galleryDesc: "Uma amostra das capas que os jogadores deixaram publicas.",
+    galleryCta: "Ver galeria completa",
+    galleryEmpty: "Nenhuma capa publica ainda. Seja o primeiro a compartilhar a sua!",
+    tutorialTitle: "Como instalar e usar",
+    tutorialSteps: [
+      { title: "Instale o mod loader", desc: "Baixe e instale o Fabric ou o NeoForge, de acordo com a versao do Minecraft que voce usa." },
+      { title: "Baixe o AdaptiveCaps", desc: "Pegue o arquivo do mod no Modrinth ou na CurseForge (links abaixo) e coloque na pasta \"mods\" da sua instalacao." },
+      { title: "Abra o Minecraft", desc: "Inicie o jogo normalmente e entre em qualquer mundo ou servidor." },
+      { title: "Abra o menu da capa", desc: "Use a tecla de atalho do AdaptiveCaps (configuravel em Opcoes > Controles) para abrir a tela de personalizacao." },
+      { title: "Escolha ou crie sua capa", desc: "Selecione uma capa pronta, envie uma imagem sua, ou gere uma nova com o assistente de IA." },
+      { title: "Ative a visibilidade", desc: "Marque sua capa como \"visivel\" para que outros jogadores com o mod te vejam com ela em qualquer servidor." }
+    ],
+    rulesTitle: "Regras de uso",
+    rules: [
+      "Proibido usar imagens com conteudo impropio, sexual, ou de nudez.",
+      "Proibido usar simbolos de odio, discriminacao ou apologia a violencia.",
+      "Proibido se passar por outro jogador, marca ou membro da equipe.",
+      "Capas denunciadas podem ser banidas e removidas sem aviso previo.",
+      "Uso indevido pode levar ao banimento permanente do sistema de nuvem."
+    ],
+    downloadTitle: "Baixe o mod",
+    downloadModrinth: "Baixar no Modrinth",
+    downloadCurseforge: "Baixar na CurseForge",
+    footer: "AdaptiveCaps Relay"
+  },
+  en: {
+    heroBadge: "Cloud cape sync",
+    heroTitle: "AdaptiveCaps",
+    heroSubtitle: "Pick, create, or AI-generate your character's cape, and bring it to any server you play on.",
+    statsTitle: "By the numbers",
+    statOnline: "Online",
+    statPlayers: "Players",
+    statCapes: "Visible capes",
+    statStorage: "Stored data",
+    galleryTitle: "Some capes from the community",
+    galleryDesc: "A sample of the capes players have made public.",
+    galleryCta: "See full gallery",
+    galleryEmpty: "No public capes yet. Be the first to share yours!",
+    tutorialTitle: "How to install and use",
+    tutorialSteps: [
+      { title: "Install a mod loader", desc: "Download and install Fabric or NeoForge, matching your Minecraft version." },
+      { title: "Download AdaptiveCaps", desc: "Get the mod file from Modrinth or CurseForge (links below) and put it in your \"mods\" folder." },
+      { title: "Launch Minecraft", desc: "Start the game normally and join any world or server." },
+      { title: "Open the cape menu", desc: "Use the AdaptiveCaps keybind (configurable in Options > Controls) to open the customization screen." },
+      { title: "Pick or create your cape", desc: "Choose a preset cape, upload your own image, or generate a new one with the AI assistant." },
+      { title: "Turn on visibility", desc: "Mark your cape as \"visible\" so other players with the mod see it on any server." }
+    ],
+    rulesTitle: "Usage rules",
+    rules: [
+      "No inappropriate, sexual, or nudity content in images.",
+      "No hate symbols, discrimination, or glorification of violence.",
+      "No impersonating other players, brands, or staff members.",
+      "Reported capes may be banned and removed without prior notice.",
+      "Misuse can lead to a permanent ban from the cloud system."
+    ],
+    downloadTitle: "Download the mod",
+    downloadModrinth: "Download on Modrinth",
+    downloadCurseforge: "Download on CurseForge",
+    footer: "AdaptiveCaps Relay"
+  },
+  es: {
+    heroBadge: "Sincronizacion de capas en la nube",
+    heroTitle: "AdaptiveCaps",
+    heroSubtitle: "Elige, crea o genera con IA la capa de tu personaje, y llevala a cualquier servidor donde juegues.",
+    statsTitle: "En numeros",
+    statOnline: "En linea",
+    statPlayers: "Jugadores",
+    statCapes: "Capas visibles",
+    statStorage: "Datos almacenados",
+    galleryTitle: "Algunas capas de la comunidad",
+    galleryDesc: "Una muestra de las capas que los jugadores hicieron publicas.",
+    galleryCta: "Ver galeria completa",
+    galleryEmpty: "Aun no hay capas publicas. ¡Se el primero en compartir la tuya!",
+    tutorialTitle: "Como instalar y usar",
+    tutorialSteps: [
+      { title: "Instala un mod loader", desc: "Descarga e instala Fabric o NeoForge, segun tu version de Minecraft." },
+      { title: "Descarga AdaptiveCaps", desc: "Obten el archivo del mod en Modrinth o CurseForge (enlaces abajo) y ponlo en tu carpeta \"mods\"." },
+      { title: "Abre Minecraft", desc: "Inicia el juego normalmente y entra a cualquier mundo o servidor." },
+      { title: "Abre el menu de la capa", desc: "Usa el atajo de AdaptiveCaps (configurable en Opciones > Controles) para abrir la pantalla de personalizacion." },
+      { title: "Elige o crea tu capa", desc: "Selecciona una capa lista, sube tu propia imagen, o genera una nueva con el asistente de IA." },
+      { title: "Activa la visibilidad", desc: "Marca tu capa como \"visible\" para que otros jugadores con el mod te vean en cualquier servidor." }
+    ],
+    rulesTitle: "Reglas de uso",
+    rules: [
+      "Prohibido usar imagenes con contenido inapropiado, sexual o desnudez.",
+      "Prohibido usar simbolos de odio, discriminacion o apologia a la violencia.",
+      "Prohibido suplantar a otro jugador, marca o miembro del staff.",
+      "Las capas denunciadas pueden ser baneadas y eliminadas sin previo aviso.",
+      "El mal uso puede llevar a un baneo permanente del sistema en la nube."
+    ],
+    downloadTitle: "Descarga el mod",
+    downloadModrinth: "Descargar en Modrinth",
+    downloadCurseforge: "Descargar en CurseForge",
+    footer: "AdaptiveCaps Relay"
+  },
+  fr: {
+    heroBadge: "Synchronisation de capes dans le cloud",
+    heroTitle: "AdaptiveCaps",
+    heroSubtitle: "Choisissez, creez ou generez avec l'IA la cape de votre personnage, et emportez-la sur n'importe quel serveur.",
+    statsTitle: "En chiffres",
+    statOnline: "En ligne",
+    statPlayers: "Joueurs",
+    statCapes: "Capes visibles",
+    statStorage: "Donnees stockees",
+    galleryTitle: "Quelques capes de la communaute",
+    galleryDesc: "Un apercu des capes que les joueurs ont rendues publiques.",
+    galleryCta: "Voir la galerie complete",
+    galleryEmpty: "Pas encore de cape publique. Soyez le premier a partager la votre !",
+    tutorialTitle: "Comment installer et utiliser",
+    tutorialSteps: [
+      { title: "Installez un mod loader", desc: "Telechargez et installez Fabric ou NeoForge, selon votre version de Minecraft." },
+      { title: "Telechargez AdaptiveCaps", desc: "Recuperez le fichier du mod sur Modrinth ou CurseForge (liens ci-dessous) et placez-le dans le dossier \"mods\"." },
+      { title: "Lancez Minecraft", desc: "Demarrez le jeu normalement et rejoignez un monde ou un serveur." },
+      { title: "Ouvrez le menu de la cape", desc: "Utilisez le raccourci AdaptiveCaps (configurable dans Options > Commandes) pour ouvrir l'ecran de personnalisation." },
+      { title: "Choisissez ou creez votre cape", desc: "Selectionnez une cape existante, envoyez votre propre image, ou generez-en une avec l'assistant IA." },
+      { title: "Activez la visibilite", desc: "Marquez votre cape comme \"visible\" pour que les autres joueurs avec le mod la voient sur n'importe quel serveur." }
+    ],
+    rulesTitle: "Regles d'utilisation",
+    rules: [
+      "Interdit d'utiliser des images au contenu inapproprie, sexuel ou de nudite.",
+      "Interdit d'utiliser des symboles de haine, de discrimination ou faisant l'apologie de la violence.",
+      "Interdit d'usurper l'identite d'un autre joueur, d'une marque ou d'un membre du staff.",
+      "Les capes signalees peuvent etre bannies et supprimees sans preavis.",
+      "Un usage abusif peut entrainer un bannissement permanent du systeme cloud."
+    ],
+    downloadTitle: "Telechargez le mod",
+    downloadModrinth: "Telecharger sur Modrinth",
+    downloadCurseforge: "Telecharger sur CurseForge",
+    footer: "AdaptiveCaps Relay"
+  },
+  de: {
+    heroBadge: "Cloud-Umhang-Synchronisierung",
+    heroTitle: "AdaptiveCaps",
+    heroSubtitle: "Wahle, erstelle oder generiere per KI den Umhang deiner Spielfigur und nimm ihn mit auf jeden Server.",
+    statsTitle: "In Zahlen",
+    statOnline: "Online",
+    statPlayers: "Spieler",
+    statCapes: "Sichtbare Umhaenge",
+    statStorage: "Gespeicherte Daten",
+    galleryTitle: "Einige Umhaenge der Community",
+    galleryDesc: "Eine Auswahl der Umhaenge, die Spieler oeffentlich gemacht haben.",
+    galleryCta: "Vollstaendige Galerie ansehen",
+    galleryEmpty: "Noch keine oeffentlichen Umhaenge. Sei der Erste, der seinen teilt!",
+    tutorialTitle: "Installation und Nutzung",
+    tutorialSteps: [
+      { title: "Mod-Loader installieren", desc: "Lade Fabric oder NeoForge passend zu deiner Minecraft-Version herunter und installiere es." },
+      { title: "AdaptiveCaps herunterladen", desc: "Lade die Mod-Datei von Modrinth oder CurseForge (Links unten) herunter und lege sie in deinen \"mods\"-Ordner." },
+      { title: "Minecraft starten", desc: "Starte das Spiel normal und betrete eine beliebige Welt oder einen Server." },
+      { title: "Umhang-Menue oeffnen", desc: "Benutze die AdaptiveCaps-Taste (einstellbar unter Optionen > Steuerung), um den Anpassungsbildschirm zu oeffnen." },
+      { title: "Umhang waehlen oder erstellen", desc: "Waehle einen vorhandenen Umhang, lade ein eigenes Bild hoch, oder generiere einen neuen mit dem KI-Assistenten." },
+      { title: "Sichtbarkeit aktivieren", desc: "Markiere deinen Umhang als \"sichtbar\", damit andere Spieler mit der Mod ihn auf jedem Server sehen." }
+    ],
+    rulesTitle: "Nutzungsregeln",
+    rules: [
+      "Keine Bilder mit unangemessenem, sexuellem oder nacktem Inhalt.",
+      "Keine Hasssymbole, Diskriminierung oder Verherrlichung von Gewalt.",
+      "Keine Nachahmung anderer Spieler, Marken oder Teammitglieder.",
+      "Gemeldete Umhaenge koennen ohne Vorankuendigung gesperrt und entfernt werden.",
+      "Missbrauch kann zu einer dauerhaften Sperre des Cloud-Systems fuehren."
+    ],
+    downloadTitle: "Mod herunterladen",
+    downloadModrinth: "Auf Modrinth herunterladen",
+    downloadCurseforge: "Auf CurseForge herunterladen",
+    footer: "AdaptiveCaps Relay"
+  }
+};
+
+function renderHomePage(stats, previewCapes) {
+  const t = HOME_I18N["pt-BR"];
+
+  const capesHtml = previewCapes.length > 0
+    ? previewCapes.map(entry => {
+        const imageUrl = entry.hasOriginal ? "/original-image/" + entry.uuid : "/cape-image/" + entry.uuid + ".png";
+        return (
+          '<div class="cape-card">' +
+          '<img src="' + imageUrl + '" alt="Cape ' + escapeHtml(entry.username || entry.uuid) + '" loading="lazy">' +
+          '<h3>' + escapeHtml(entry.username || "unknown") + '</h3>' +
+          '</div>'
+        );
+      }).join("")
+    : `<p class="msg" data-i18n="galleryEmpty">${escapeHtml(t.galleryEmpty)}</p>`;
+
+  const tutorialHtml = t.tutorialSteps.map((step, index) => `
+    <div class="card step">
+      <div class="num">${index + 1}</div>
+      <div>
+        <h4 data-i18n-step="${index}:title">${escapeHtml(step.title)}</h4>
+        <p data-i18n-step="${index}:desc">${escapeHtml(step.desc)}</p>
+      </div>
+    </div>`).join("");
+
+  const rulesHtml = t.rules.map((rule, index) => `<li data-i18n-rule="${index}">${escapeHtml(rule)}</li>`).join("");
+
+  const body = `
+<div class="container">
+  <div class="hero">
+    <p class="msg" data-i18n="heroBadge" style="text-transform:uppercase;letter-spacing:1px;font-size:12px;font-weight:700;color:var(--accent-2)">${escapeHtml(t.heroBadge)}</p>
+    <h1 data-i18n="heroTitle">${escapeHtml(t.heroTitle)}</h1>
+    <p data-i18n="heroSubtitle">${escapeHtml(t.heroSubtitle)}</p>
+    <div class="lang-switch" id="lang-switch" style="margin-top:20px">
+      <button data-lang="pt-BR" class="active">PT</button>
+      <button data-lang="en">EN</button>
+      <button data-lang="es">ES</button>
+      <button data-lang="fr">FR</button>
+      <button data-lang="de">DE</button>
+    </div>
+    <div class="download-row">
+      <a class="btn btn-primary" href="${MODRINTH_URL}" target="_blank" rel="noopener" data-i18n="downloadModrinth">${escapeHtml(t.downloadModrinth)}</a>
+      <a class="btn btn-outline" href="${CURSEFORGE_URL}" target="_blank" rel="noopener" data-i18n="downloadCurseforge">${escapeHtml(t.downloadCurseforge)}</a>
+    </div>
+  </div>
+
+  <h2 class="section-title"><span class="bar"></span><span data-i18n="statsTitle">${escapeHtml(t.statsTitle)}</span></h2>
+  <div class="stat-grid">
+    <div class="card stat-tile"><div class="value" data-i18n="statOnline">${escapeHtml(t.statOnline)}</div><div class="label">Status</div></div>
+    <div class="card stat-tile"><div class="value">${stats.totalPlayers}</div><div class="label" data-i18n="statPlayers">${escapeHtml(t.statPlayers)}</div></div>
+    <div class="card stat-tile"><div class="value">${stats.visibleCapes}</div><div class="label" data-i18n="statCapes">${escapeHtml(t.statCapes)}</div></div>
+    <div class="card stat-tile"><div class="value">${stats.storageSizeMb} MB</div><div class="label" data-i18n="statStorage">${escapeHtml(t.statStorage)}</div></div>
+  </div>
+
+  <h2 class="section-title"><span class="bar"></span><span data-i18n="galleryTitle">${escapeHtml(t.galleryTitle)}</span></h2>
+  <p class="msg" data-i18n="galleryDesc">${escapeHtml(t.galleryDesc)}</p>
+  <a href="/capes" style="text-decoration:none">
+    <div class="cape-grid" style="margin-top:18px">${capesHtml}</div>
+  </a>
+  <div class="center" style="margin-top:22px">
+    <a class="btn btn-outline" href="/capes" data-i18n="galleryCta">${escapeHtml(t.galleryCta)}</a>
+  </div>
+
+  <h2 class="section-title"><span class="bar"></span><span data-i18n="tutorialTitle">${escapeHtml(t.tutorialTitle)}</span></h2>
+  <div class="tutorial-steps">${tutorialHtml}</div>
+
+  <h2 class="section-title"><span class="bar"></span><span data-i18n="rulesTitle">${escapeHtml(t.rulesTitle)}</span></h2>
+  <ul class="card rules-list">${rulesHtml}</ul>
+
+  <div class="footer" data-i18n="footer">${escapeHtml(t.footer)}</div>
+</div>
+<script>
+const I18N = ${JSON.stringify(HOME_I18N)};
+
+function applyLanguage(lang) {
+  const dict = I18N[lang] || I18N["pt-BR"];
+  document.querySelectorAll("[data-i18n]").forEach(function (el) {
+    const key = el.getAttribute("data-i18n");
+    if (dict[key] !== undefined) el.textContent = dict[key];
+  });
+  document.querySelectorAll("[data-i18n-step]").forEach(function (el) {
+    const [index, field] = el.getAttribute("data-i18n-step").split(":");
+    const step = dict.tutorialSteps && dict.tutorialSteps[Number(index)];
+    if (step && step[field] !== undefined) el.textContent = step[field];
+  });
+  document.querySelectorAll("[data-i18n-rule]").forEach(function (el) {
+    const index = Number(el.getAttribute("data-i18n-rule"));
+    if (dict.rules && dict.rules[index] !== undefined) el.textContent = dict.rules[index];
+  });
+  document.documentElement.lang = lang;
+  document.querySelectorAll("#lang-switch button").forEach(function (btn) {
+    btn.classList.toggle("active", btn.dataset.lang === lang);
+  });
+  try { localStorage.setItem("adaptivecaps_lang", lang); } catch {}
+}
+
+document.querySelectorAll("#lang-switch button").forEach(function (btn) {
+  btn.addEventListener("click", function () { applyLanguage(btn.dataset.lang); });
+});
+
+try {
+  const saved = localStorage.getItem("adaptivecaps_lang");
+  if (saved && I18N[saved]) applyLanguage(saved);
+} catch {}
+</script>`;
+
+  return pageShell({ title: "AdaptiveCaps", activeNav: "home", body });
+}
+
 function statusPayload() {
   return {
     ok: true,
