@@ -134,7 +134,7 @@ a{color:inherit;}
   box-shadow:0 0 16px -2px rgba(49,183,255,.4);
   opacity:0;
   pointer-events:none;
-  transition:transform .28s cubic-bezier(.4,0,.2,1), width .28s cubic-bezier(.4,0,.2,1), opacity .18s;
+  transition:transform .38s cubic-bezier(.22,1,.36,1), width .38s cubic-bezier(.22,1,.36,1), opacity .2s;
 }
 .nav-links a{
   position:relative;
@@ -490,7 +490,7 @@ ${extraHead}
       moveIndicatorTo(link, true);
       setTimeout(function () {
         window.location.href = link.href;
-      }, 200);
+      }, 280);
     });
   });
 
