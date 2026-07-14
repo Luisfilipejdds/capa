@@ -19,6 +19,8 @@ const capesDir = path.join(dataDir, "capes");
 const indexFile = path.join(dataDir, "index.json");
 const libraryDir = path.join(dataDir, "library");
 const libraryIndexFile = path.join(dataDir, "libraryIndex.json");
+const featuredFile = path.join(dataDir, "featured.json");
+const featuredCapesMax = 10;
 
 const maxCapeBytes = Number.parseInt(process.env.MAX_CAPE_SIZE ?? "1048576", 10);
 const maxOriginalBytes = Number.parseInt(process.env.MAX_ORIGINAL_SIZE ?? "31457280", 10);
@@ -413,7 +415,8 @@ app.get("/", async (req, res) => {
     const totalCapeFiles = await countCapeFiles();
     const storageSizeMb = await getStorageSizeMb();
     const stats = computeStats(metadata, totalCapeFiles, storageSizeMb);
-    const previewCapes = listVisibleCapes(metadata).slice(0, 8);
+    const featuredUuids = await readFeaturedUuids();
+    const previewCapes = getFeaturedCapes(metadata, featuredUuids);
     return res.type("html").send(renderHomePage(stats, previewCapes));
   } catch (error) {
     return handleError(res, error);
@@ -537,6 +540,48 @@ app.get("/api/v1/admin/capes", async (req, res) => {
     return handleError(res, error);
   }
 });
+app.get("/api/v1/admin/featured", async (req, res) => {
+  try {
+    requireAdmin(req);
+    const uuids = await readFeaturedUuids();
+    return res.status(200).json({ ok: true, uuids });
+  } catch (error) {
+    return handleError(res, error);
+  }
+});
+app.post("/api/v1/admin/featured", async (req, res) => {
+  try {
+    requireAdmin(req);
+    const body = req.body ?? {};
+    const rawUuids = Array.isArray(body.uuids) ? body.uuids : [];
+
+    if (rawUuids.length > featuredCapesMax) {
+      throw httpError(400, "too_many_featured");
+    }
+
+    const seen = new Set();
+    const uuids = [];
+
+    for (const rawUuid of rawUuids) {
+      const uuid = String(rawUuid ?? "").toLowerCase();
+      if (!uuidPattern.test(uuid) || seen.has(uuid)) {
+        continue;
+      }
+      seen.add(uuid);
+      uuids.push(uuid);
+    }
+
+    await updateFeaturedUuids(current => {
+      current.length = 0;
+      current.push(...uuids);
+    });
+
+    console.info(`[FEATURED] admin definiu ${uuids.length} capa(s) em destaque`);
+    return res.status(200).json({ ok: true, uuids });
+  } catch (error) {
+    return handleError(res, error);
+  }
+});
 // Galeria publica (sem token, sem opcao de banir) - a mesma lista de capas
 // visiveis, mas sem qualquer acao administrativa exposta.
 app.get("/api/v1/capes/gallery", async (req, res) => {
@@ -634,18 +679,33 @@ app.get("/admincape", (req, res) => {
 <div class="container">
   <div class="hero">
     <h1 id="title">Admin - Capas</h1>
-    <p>Area restrita. Requer o token de admin para listar e banir capas.</p>
+    <p>Area restrita. Requer o token de admin para listar, banir e destacar capas na home.</p>
+  </div>
+  <div class="card center" id="featured-bar" style="padding:16px;margin-bottom:24px;display:flex;gap:16px;align-items:center;justify-content:center;flex-wrap:wrap">
+    <span id="featured-count">Destaques selecionados: 0/${featuredCapesMax}</span>
+    <button class="btn btn-primary" id="save-featured-btn">Salvar destaques</button>
   </div>
   <div id="content" class="cape-grid"><p class="msg center">Carregando...</p></div>
   <div class="footer">AdaptiveCaps Relay</div>
 </div>
 <script>
 let adminToken = "";
+const FEATURED_MAX = ${featuredCapesMax};
+let featuredUuids = new Set();
 
 function escapeHtml(value) {
   const div = document.createElement("div");
   div.textContent = String(value ?? "");
   return div.innerHTML;
+}
+
+function updateFeaturedCount() {
+  document.getElementById("featured-count").textContent = "Destaques selecionados: " + featuredUuids.size + "/" + FEATURED_MAX;
+  document.querySelectorAll(".featured-checkbox").forEach(function (checkbox) {
+    if (!checkbox.checked) {
+      checkbox.disabled = featuredUuids.size >= FEATURED_MAX;
+    }
+  });
 }
 
 async function loadCapes() {
@@ -659,19 +719,25 @@ async function loadCapes() {
   content.innerHTML = '<p class="msg center">Carregando...</p>';
 
   try {
-    const response = await fetch("/api/v1/admin/capes", { headers: { "x-admin-token": adminToken } });
-    if (response.status === 403) {
+    const [capesResponse, featuredResponse] = await Promise.all([
+      fetch("/api/v1/admin/capes", { headers: { "x-admin-token": adminToken } }),
+      fetch("/api/v1/admin/featured", { headers: { "x-admin-token": adminToken } })
+    ]);
+
+    if (capesResponse.status === 403 || featuredResponse.status === 403) {
       content.innerHTML = '<p class="msg center">Token invalido.</p>';
       adminToken = "";
       return;
     }
-    if (!response.ok) {
-      content.innerHTML = '<p class="msg center">Falha ao carregar (status ' + response.status + ').</p>';
+    if (!capesResponse.ok) {
+      content.innerHTML = '<p class="msg center">Falha ao carregar (status ' + capesResponse.status + ').</p>';
       return;
     }
 
-    const data = await response.json();
-    renderCapes(data.capes || []);
+    const capesData = await capesResponse.json();
+    const featuredData = featuredResponse.ok ? await featuredResponse.json() : { uuids: [] };
+    featuredUuids = new Set(featuredData.uuids || []);
+    renderCapes(capesData.capes || []);
   } catch (error) {
     content.innerHTML = '<p class="msg center">Erro ao carregar: ' + escapeHtml(error.message) + '</p>';
   }
@@ -692,6 +758,7 @@ function renderCapes(capes) {
       ? (entry.originalFormat || "unknown").toUpperCase() + " • " + (entry.originalSize || 0) + " bytes"
       : "Sem original salvo";
     const imageUrl = entry.hasOriginal ? "/original-image/" + entry.uuid : "/cape-image/" + entry.uuid + ".png";
+    const checked = featuredUuids.has(entry.uuid) ? "checked" : "";
     return (
       '<div class="card cape-card">' +
       '<a href="' + imageUrl + '" target="_blank">' +
@@ -701,7 +768,10 @@ function renderCapes(capes) {
       '<p class="muted">Atualizada: ' + escapeHtml(updated) + "</p>" +
       '<p class="muted">Original: ' + escapeHtml(originalInfo) + "</p>" +
       '<p class="hash">' + escapeHtml(String(entry.hash || "").slice(0, 12)) + "...</p>" +
-      '<button class="btn btn-danger btn-block" style="margin-top:12px" data-uuid="' + escapeHtml(entry.uuid) + '" data-name="' + escapeHtml(entry.username || entry.uuid) + '">Banir capa</button>' +
+      '<label style="display:flex;align-items:center;gap:8px;justify-content:center;margin-top:12px;font-size:13px;color:var(--text-muted)">' +
+      '<input type="checkbox" class="featured-checkbox" data-uuid="' + escapeHtml(entry.uuid) + '" ' + checked + '> Destacar na home' +
+      "</label>" +
+      '<button class="btn btn-danger btn-block" style="margin-top:10px" data-uuid="' + escapeHtml(entry.uuid) + '" data-name="' + escapeHtml(entry.username || entry.uuid) + '">Banir capa</button>' +
       "</div>"
     );
   }).join("");
@@ -711,6 +781,20 @@ function renderCapes(capes) {
       banCape(btn.dataset.uuid, btn.dataset.name, btn);
     });
   });
+
+  content.querySelectorAll(".featured-checkbox").forEach(function (checkbox) {
+    checkbox.addEventListener("change", function () {
+      const uuid = checkbox.dataset.uuid;
+      if (checkbox.checked) {
+        featuredUuids.add(uuid);
+      } else {
+        featuredUuids.delete(uuid);
+      }
+      updateFeaturedCount();
+    });
+  });
+
+  updateFeaturedCount();
 }
 
 async function banCape(uuid, name, btn) {
@@ -737,6 +821,31 @@ async function banCape(uuid, name, btn) {
     btn.textContent = "Banir capa";
   }
 }
+
+async function saveFeatured() {
+  const btn = document.getElementById("save-featured-btn");
+  btn.disabled = true;
+  btn.textContent = "Salvando...";
+  try {
+    const response = await fetch("/api/v1/admin/featured", {
+      method: "POST",
+      headers: { "x-admin-token": adminToken, "Content-Type": "application/json" },
+      body: JSON.stringify({ uuids: Array.from(featuredUuids) })
+    });
+    if (!response.ok) {
+      alert("Falha ao salvar (status " + response.status + ").");
+      return;
+    }
+    alert("Destaques salvos!");
+  } catch (error) {
+    alert("Erro ao salvar: " + error.message);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = "Salvar destaques";
+  }
+}
+
+document.getElementById("save-featured-btn").addEventListener("click", saveFeatured);
 
 loadCapes();
 </script>`;
@@ -1532,6 +1641,7 @@ function createMutex() {
 
 const indexLock = createMutex();
 const libraryIndexLock = createMutex();
+const featuredLock = createMutex();
 
 async function updateIndexEntry(mutate) {
   return indexLock(async () => {
@@ -1549,6 +1659,56 @@ async function updateLibraryIndexEntry(mutate) {
     await writeLibraryIndex(index);
     return result;
   });
+}
+
+async function readFeaturedUuids() {
+  try {
+    const raw = await fs.readFile(featuredFile, "utf8");
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed.filter(value => typeof value === "string") : [];
+  } catch (error) {
+    if (error.code === "ENOENT") return [];
+    throw error;
+  }
+}
+
+async function writeFeaturedUuids(uuids) {
+  await writeJsonAtomic(featuredFile, uuids);
+}
+
+async function updateFeaturedUuids(mutate) {
+  return featuredLock(async () => {
+    const uuids = await readFeaturedUuids();
+    const result = await mutate(uuids);
+    await writeFeaturedUuids(uuids);
+    return result;
+  });
+}
+
+// Retorna as capas escolhidas pelo admin para aparecer na home, na ordem em
+// que foram escolhidas. Pula uuids que nao existem mais ou que deixaram de
+// ser visiveis (banimento, capa apagada, etc.) sem quebrar a lista inteira.
+// Se o admin nunca escolheu nada (ou todas as escolhas ficaram invalidas),
+// cai de volta pras mais recentes - a home nunca fica vazia por omissao.
+function getFeaturedCapes(metadata, featuredUuids) {
+  const featured = featuredUuids
+    .map(uuid => metadata[uuid])
+    .filter(entry => entry?.visible === true && entry?.hash)
+    .map(entry => ({
+      uuid: String(entry.uuid ?? ""),
+      username: String(entry.username ?? ""),
+      updatedAt: Number.isSafeInteger(entry.updatedAt) ? entry.updatedAt : 0,
+      hash: String(entry.hash ?? ""),
+      hasOriginal: Boolean(entry.originalFile),
+      originalFormat: String(entry.originalFormat ?? ""),
+      originalSize: Number.isSafeInteger(entry.originalSize) ? entry.originalSize : 0
+    }));
+
+  if (featured.length > 0) {
+    return featured.slice(0, featuredCapesMax);
+  }
+
+  return listVisibleCapes(metadata).slice(0, featuredCapesMax);
 }
 
 async function countCapeFiles() {
