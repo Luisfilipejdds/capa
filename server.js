@@ -79,32 +79,49 @@ a{color:inherit;}
   align-items:center;
   justify-content:space-between;
   gap:16px;
-  padding:16px 28px;
-  background:rgba(10,14,22,.75);
-  backdrop-filter:blur(10px);
-  border-bottom:1px solid var(--border);
+  padding:14px 28px;
+  background:rgba(10,14,22,.7);
+  backdrop-filter:blur(14px);
+  -webkit-backdrop-filter:blur(14px);
+  box-shadow:0 1px 0 0 rgba(49,183,255,.18), 0 12px 24px -18px rgba(0,0,0,.6);
 }
 .nav-brand{
   display:flex;
   align-items:center;
-  gap:10px;
-  font-weight:700;
-  font-size:18px;
+  gap:11px;
+  font-weight:800;
+  font-size:19px;
+  letter-spacing:-.2px;
   text-decoration:none;
-  color:var(--text);
 }
-.nav-brand .dot{
-  width:10px;height:10px;border-radius:50%;
+.nav-brand .brand-text{
+  background:linear-gradient(135deg,#fff,var(--accent) 70%,var(--accent-2));
+  -webkit-background-clip:text;
+  background-clip:text;
+  color:transparent;
+}
+.nav-brand .logo-badge{
+  width:32px;height:32px;
+  border-radius:10px;
+  display:flex;align-items:center;justify-content:center;
   background:linear-gradient(135deg,var(--accent),var(--accent-2));
-  box-shadow:0 0 12px rgba(49,183,255,.7);
+  box-shadow:0 4px 16px -4px rgba(49,183,255,.6);
+}
+.nav-brand .logo-badge svg{
+  width:18px;height:18px;
+  display:block;
 }
 .nav-links{
   display:flex;
-  gap:8px;
+  gap:4px;
   flex-wrap:wrap;
+  background:rgba(255,255,255,.03);
+  border:1px solid var(--border);
+  padding:4px;
+  border-radius:999px;
 }
 .nav-links a{
-  padding:8px 14px;
+  padding:8px 16px;
   border-radius:999px;
   font-size:14px;
   font-weight:600;
@@ -387,7 +404,15 @@ ${extraHead}
 </head>
 <body>
 <nav class="nav">
-  <a class="nav-brand" href="/"><span class="dot"></span> AdaptiveCaps</a>
+  <a class="nav-brand" href="/">
+    <span class="logo-badge">
+      <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+        <path d="M12 2C9.2 2 6.7 3.4 5.1 5.9L4 19.2C3.9 20.3 5 21.1 6 20.6L12 17.8L18 20.6C19 21.1 20.1 20.3 20 19.2L18.9 5.9C17.3 3.4 14.8 2 12 2Z" fill="white"/>
+        <path d="M12 2.4V17.8" stroke="rgba(8,16,28,.35)" stroke-width="1.1" stroke-linecap="round"/>
+      </svg>
+    </span>
+    <span class="brand-text">AdaptiveCaps</span>
+  </a>
   <div class="nav-links">
     <a href="/" ${activeNav === "home" ? 'class="active"' : ""}>Inicio</a>
     <a href="/status" ${activeNav === "status" ? 'class="active"' : ""}>Status</a>
