@@ -1905,19 +1905,19 @@ async function convertAiImageToCape(imageBuffer) {
   return capePng;
 }
 function formatUptime(totalSeconds) {
-  const days = Math.floor(totalSeconds / 86400);
-  const hours = Math.floor((totalSeconds % 86400) / 3600);
+  const hours = Math.floor(totalSeconds / 3600);
   const minutes = Math.floor((totalSeconds % 3600) / 60);
-  if (days > 0) return `${days}d ${hours}h`;
+  const seconds = Math.floor(totalSeconds % 60);
   if (hours > 0) return `${hours}h ${minutes}m`;
-  return `${minutes}m`;
+  if (minutes > 0) return `${minutes}m ${seconds}s`;
+  return `${seconds}s`;
 }
 
 function renderStatusPage(stats) {
   const body = `
 <div class="container">
   <div class="hero">
-    <h1>Status do Relay</h1>
+    <h1>Status do AdaptiveCaps</h1>
     <p>Informacoes em tempo real do servidor que sincroniza as capas do AdaptiveCaps.</p>
   </div>
   <h2 class="section-title"><span class="bar"></span>Visao geral</h2>
@@ -1928,7 +1928,6 @@ function renderStatusPage(stats) {
     <div class="card stat-tile"><div class="value">${stats.totalPlayers}</div><div class="label">Jogadores registrados</div></div>
     <div class="card stat-tile"><div class="value">${stats.visibleCapes}</div><div class="label">Capas visiveis</div></div>
     <div class="card stat-tile"><div class="value">${stats.totalCapeFiles}</div><div class="label">Arquivos de capa</div></div>
-    <div class="card stat-tile"><div class="value">${stats.storageSizeMb} MB</div><div class="label">Espaco usado</div></div>
   </div>
   <div class="center" style="margin-top:36px">
     <a class="btn btn-outline" href="/capes">Ver galeria de capas</a>
@@ -2166,7 +2165,6 @@ function renderHomePage(stats, previewCapes) {
     <div class="card stat-tile"><div class="value" data-i18n="statOnline">${escapeHtml(t.statOnline)}</div><div class="label">Status</div></div>
     <div class="card stat-tile"><div class="value">${stats.totalPlayers}</div><div class="label" data-i18n="statPlayers">${escapeHtml(t.statPlayers)}</div></div>
     <div class="card stat-tile"><div class="value">${stats.visibleCapes}</div><div class="label" data-i18n="statCapes">${escapeHtml(t.statCapes)}</div></div>
-    <div class="card stat-tile"><div class="value">${stats.storageSizeMb} MB</div><div class="label" data-i18n="statStorage">${escapeHtml(t.statStorage)}</div></div>
   </div>
 
   <h2 class="section-title"><span class="bar"></span><span data-i18n="galleryTitle">${escapeHtml(t.galleryTitle)}</span></h2>
