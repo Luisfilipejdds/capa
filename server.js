@@ -39,6 +39,7 @@ const startedAt = Date.now();
 
 const MODRINTH_URL = "https://modrinth.com/mod/adaptivecaps/versions";
 const CURSEFORGE_URL = "https://www.curseforge.com/minecraft/mc-mods/adaptivecaps/files/all?page=1&pageSize=20&showAlphaFiles=show";
+const SPONSOR_URL = "https://streethosting.com.br/aff/32";
 
 // Design compartilhado por todas as paginas HTML do site (publico e admin),
 // pra tudo ter a mesma cara em vez de cada rota reinventar seu proprio CSS.
@@ -395,7 +396,21 @@ h2.section-title .bar{
   text-align:center;
   color:var(--text-muted);
   font-size:13px;
-  padding:40px 0 10px;
+  padding:40px 24px 28px;
+  border-top:1px solid var(--border);
+  margin-top:20px;
+}
+.footer .sponsor{
+  margin-top:10px;
+  font-size:12px;
+}
+.footer .sponsor a{
+  color:var(--accent);
+  text-decoration:none;
+  font-weight:600;
+}
+.footer .sponsor a:hover{
+  text-decoration:underline;
 }
 @media(max-width:640px){
   .hero h1{font-size:30px;}
@@ -485,6 +500,10 @@ ${extraHead}
 })();
 </script>
 ${body}
+<div class="footer">
+  AdaptiveCaps Relay
+  <div class="sponsor">Hospedagem parceira: <a href="${escapeHtml(SPONSOR_URL)}" target="_blank" rel="noopener sponsored">StreetHosting</a></div>
+</div>
 </body>
 </html>`;
 }
@@ -716,7 +735,6 @@ app.get("/capes", (req, res) => {
   </div>
   <input class="search-box" id="search" type="text" placeholder="Buscar por nome do jogador...">
   <div id="content" class="cape-grid" style="margin-top:8px"><p class="msg center">Carregando...</p></div>
-  <div class="footer">AdaptiveCaps Relay</div>
 </div>
 <script>
 let allCapes = [];
@@ -797,7 +815,6 @@ app.get("/admincape", (req, res) => {
     <button class="btn btn-primary" id="save-featured-btn">Salvar destaques</button>
   </div>
   <div id="content" class="cape-grid"><p class="msg center">Carregando...</p></div>
-  <div class="footer">AdaptiveCaps Relay</div>
 </div>
 <script>
 let adminToken = "";
@@ -992,7 +1009,6 @@ app.get("/banned", (req, res) => {
     <p>Area restrita. Requer o token de admin para listar e desbanir jogadores.</p>
   </div>
   <div id="content" class="cape-grid"><p class="msg center">Carregando...</p></div>
-  <div class="footer">AdaptiveCaps Relay</div>
 </div>
 <script>
 let adminToken = "";
@@ -2204,7 +2220,6 @@ function renderStatusPage(stats) {
   <div class="center" style="margin-top:36px">
     <a class="btn btn-outline" href="/capes">Ver galeria de capas</a>
   </div>
-  <div class="footer">AdaptiveCaps Relay</div>
 </div>`;
   return pageShell({ title: "AdaptiveCaps - Status", activeNav: "status", body });
 }
@@ -2658,8 +2673,6 @@ function renderHomePage(stats, previewCapes) {
 
   <h2 class="section-title"><span class="bar"></span><span data-i18n="rulesTitle">${escapeHtml(t.rulesTitle)}</span></h2>
   <ul class="card rules-list">${rulesHtml}</ul>
-
-  <div class="footer" data-i18n="footer">${escapeHtml(t.footer)}</div>
 </div>
 <script>
 const I18N = ${JSON.stringify(HOME_I18N)};
