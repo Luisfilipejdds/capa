@@ -506,9 +506,9 @@ ${extraHead}
   </div>
   <div class="nav-links" id="nav-links">
     <span class="nav-indicator" id="nav-indicator"></span>
-    <a href="/" data-i18n="navHome" ${activeNav === "home" ? 'class="active"' : ""}>Inicio</a>
-    <a href="/status" data-i18n="navStatus" ${activeNav === "status" ? 'class="active"' : ""}>Status</a>
-    <a href="/capes" data-i18n="navGallery" ${activeNav === "capes" ? 'class="active"' : ""}>Galeria</a>
+    <a href="/" data-i18n="navHome" ${activeNav === "home" ? 'class="active"' : ""}>${escapeHtml(SITE_I18N["pt-BR"].navHome)}</a>
+    <a href="/status" data-i18n="navStatus" ${activeNav === "status" ? 'class="active"' : ""}>${escapeHtml(SITE_I18N["pt-BR"].navStatus)}</a>
+    <a href="/capes" data-i18n="navGallery" ${activeNav === "capes" ? 'class="active"' : ""}>${escapeHtml(SITE_I18N["pt-BR"].navGallery)}</a>
   </div>
 </nav>
 <script>
