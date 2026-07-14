@@ -112,6 +112,7 @@ a{color:inherit;}
   display:block;
 }
 .nav-links{
+  position:relative;
   display:flex;
   gap:4px;
   flex-wrap:wrap;
@@ -120,24 +121,36 @@ a{color:inherit;}
   padding:4px;
   border-radius:999px;
 }
+.nav-indicator{
+  position:absolute;
+  top:4px;
+  bottom:4px;
+  left:0;
+  width:0;
+  border-radius:999px;
+  background:rgba(49,183,255,.12);
+  border:1px solid rgba(49,183,255,.35);
+  box-shadow:0 0 16px -2px rgba(49,183,255,.4);
+  opacity:0;
+  pointer-events:none;
+  transition:transform .28s cubic-bezier(.4,0,.2,1), width .28s cubic-bezier(.4,0,.2,1), opacity .18s;
+}
 .nav-links a{
+  position:relative;
+  z-index:1;
   padding:8px 16px;
   border-radius:999px;
   font-size:14px;
   font-weight:600;
   text-decoration:none;
   color:var(--text-muted);
-  border:1px solid transparent;
-  transition:.15s;
+  transition:color .15s;
 }
 .nav-links a:hover{
   color:var(--text);
-  background:var(--surface-2);
 }
 .nav-links a.active{
   color:var(--accent);
-  background:rgba(49,183,255,.1);
-  border-color:rgba(49,183,255,.3);
 }
 .container{
   max-width:1080px;
@@ -413,12 +426,64 @@ ${extraHead}
     </span>
     <span class="brand-text">AdaptiveCaps</span>
   </a>
-  <div class="nav-links">
+  <div class="nav-links" id="nav-links">
+    <span class="nav-indicator" id="nav-indicator"></span>
     <a href="/" ${activeNav === "home" ? 'class="active"' : ""}>Inicio</a>
     <a href="/status" ${activeNav === "status" ? 'class="active"' : ""}>Status</a>
     <a href="/capes" ${activeNav === "capes" ? 'class="active"' : ""}>Galeria</a>
   </div>
 </nav>
+<script>
+(function () {
+  var nav = document.getElementById("nav-links");
+  var indicator = document.getElementById("nav-indicator");
+  if (!nav || !indicator) return;
+  var links = Array.prototype.slice.call(nav.querySelectorAll("a"));
+
+  function moveIndicatorTo(el, animate) {
+    if (!el) {
+      indicator.style.opacity = "0";
+      return;
+    }
+    var navRect = nav.getBoundingClientRect();
+    var rect = el.getBoundingClientRect();
+    var x = rect.left - navRect.left;
+    if (!animate) indicator.style.transition = "none";
+    indicator.style.opacity = "1";
+    indicator.style.width = rect.width + "px";
+    indicator.style.transform = "translateX(" + x + "px)";
+    if (!animate) {
+      void indicator.offsetWidth;
+      indicator.style.transition = "";
+    }
+  }
+
+  moveIndicatorTo(nav.querySelector("a.active"), false);
+
+  links.forEach(function (link) {
+    link.addEventListener("mouseenter", function () { moveIndicatorTo(link, true); });
+  });
+
+  nav.addEventListener("mouseleave", function () {
+    moveIndicatorTo(nav.querySelector("a.active"), true);
+  });
+
+  links.forEach(function (link) {
+    link.addEventListener("click", function (event) {
+      if (link.classList.contains("active")) return;
+      event.preventDefault();
+      moveIndicatorTo(link, true);
+      setTimeout(function () {
+        window.location.href = link.href;
+      }, 200);
+    });
+  });
+
+  window.addEventListener("resize", function () {
+    moveIndicatorTo(nav.querySelector("a.active"), false);
+  });
+})();
+</script>
 ${body}
 </body>
 </html>`;
