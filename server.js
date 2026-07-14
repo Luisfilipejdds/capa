@@ -2278,10 +2278,11 @@ const HOME_I18N = {
       { title: "Sincronia em nuvem", desc: "Sua capa aparece em qualquer servidor que tenha o mod." },
       { title: "100% gratuito", desc: "Sem assinatura, sem anuncio, sem pegadinha." }
     ],
-    statsTitle: "Em numeros",
+    statsTitle: "Status",
     statOnline: "Online",
     statPlayers: "Jogadores",
     statCapes: "Capas visiveis",
+    statBanned: "Jogadores banidos",
     statStorage: "Dados armazenados",
     galleryTitle: "Algumas capas da comunidade",
     galleryDesc: "Uma amostra das capas que os jogadores deixaram publicas.",
@@ -2355,10 +2356,11 @@ const HOME_I18N = {
       { title: "Cloud sync", desc: "Your cape shows up on any server that has the mod." },
       { title: "100% free", desc: "No subscription, no ads, no catch." }
     ],
-    statsTitle: "By the numbers",
+    statsTitle: "Status",
     statOnline: "Online",
     statPlayers: "Players",
     statCapes: "Visible capes",
+    statBanned: "Banned players",
     statStorage: "Stored data",
     galleryTitle: "Some capes from the community",
     galleryDesc: "A sample of the capes players have made public.",
@@ -2432,10 +2434,11 @@ const HOME_I18N = {
       { title: "Sincronizacion en la nube", desc: "Tu capa aparece en cualquier servidor que tenga el mod." },
       { title: "100% gratis", desc: "Sin suscripcion, sin anuncios, sin trucos." }
     ],
-    statsTitle: "En numeros",
+    statsTitle: "Status",
     statOnline: "En linea",
     statPlayers: "Jugadores",
     statCapes: "Capas visibles",
+    statBanned: "Jugadores baneados",
     statStorage: "Datos almacenados",
     galleryTitle: "Algunas capas de la comunidad",
     galleryDesc: "Una muestra de las capas que los jugadores hicieron publicas.",
@@ -2509,10 +2512,11 @@ const HOME_I18N = {
       { title: "Synchronisation cloud", desc: "Votre cape apparait sur n'importe quel serveur ayant le mod." },
       { title: "100% gratuit", desc: "Sans abonnement, sans pub, sans piege." }
     ],
-    statsTitle: "En chiffres",
+    statsTitle: "Status",
     statOnline: "En ligne",
     statPlayers: "Joueurs",
     statCapes: "Capes visibles",
+    statBanned: "Joueurs bannis",
     statStorage: "Donnees stockees",
     galleryTitle: "Quelques capes de la communaute",
     galleryDesc: "Un apercu des capes que les joueurs ont rendues publiques.",
@@ -2586,10 +2590,11 @@ const HOME_I18N = {
       { title: "Cloud-Synchronisierung", desc: "Dein Umhang erscheint auf jedem Server mit der Mod." },
       { title: "100% kostenlos", desc: "Kein Abo, keine Werbung, kein Haken." }
     ],
-    statsTitle: "In Zahlen",
+    statsTitle: "Status",
     statOnline: "Online",
     statPlayers: "Spieler",
     statCapes: "Sichtbare Umhaenge",
+    statBanned: "Gesperrte Spieler",
     statStorage: "Gespeicherte Daten",
     galleryTitle: "Einige Umhaenge der Community",
     galleryDesc: "Eine Auswahl der Umhaenge, die Spieler oeffentlich gemacht haben.",
@@ -2719,6 +2724,7 @@ function renderHomePage(stats, previewCapes) {
     <div class="card stat-tile"><div class="value" data-i18n="statOnline">${escapeHtml(t.statOnline)}</div><div class="label">Status</div></div>
     <div class="card stat-tile"><div class="value">${stats.totalPlayers}</div><div class="label" data-i18n="statPlayers">${escapeHtml(t.statPlayers)}</div></div>
     <div class="card stat-tile"><div class="value">${stats.visibleCapes}</div><div class="label" data-i18n="statCapes">${escapeHtml(t.statCapes)}</div></div>
+    <div class="card stat-tile"><div class="value">${stats.bannedPlayers}</div><div class="label" data-i18n="statBanned">${escapeHtml(t.statBanned)}</div></div>
   </div>
 
   <h2 class="section-title"><span class="bar"></span><span data-i18n="galleryTitle">${escapeHtml(t.galleryTitle)}</span></h2>
