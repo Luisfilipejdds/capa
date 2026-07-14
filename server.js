@@ -414,8 +414,21 @@ h2.section-title .bar{
 }
 @media(max-width:640px){
   .hero h1{font-size:30px;}
-  .nav{padding:14px 16px;}
+  .nav{
+    flex-wrap:wrap;
+    justify-content:center;
+    row-gap:10px;
+    padding:12px 16px;
+  }
+  .nav-links{
+    order:1;
+    width:100%;
+    justify-content:center;
+  }
   .container{padding:32px 16px 60px;}
+  .download-row{flex-direction:column;align-items:stretch;}
+  .lang-switch{gap:5px;}
+  .lang-switch button{padding:6px 10px;font-size:12px;}
 }
 `;
 
