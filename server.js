@@ -558,10 +558,15 @@ document.querySelectorAll("#lang-switch button").forEach(function (btn) {
   btn.addEventListener("click", function () { applyLanguage(btn.dataset.lang); });
 });
 
-try {
-  const savedLang = localStorage.getItem("adaptivecaps_lang");
-  if (savedLang && I18N[savedLang]) applyLanguage(savedLang);
-} catch {}
+document.addEventListener("DOMContentLoaded", function () {
+  // Precisa esperar o DOM terminar de parsear: esse script roda antes do
+  // conteudo da pagina (\${body}) no HTML, entao os elementos com data-i18n
+  // ainda nao existem se a gente tentar aplicar o idioma salvo na hora.
+  try {
+    const savedLang = localStorage.getItem("adaptivecaps_lang");
+    if (savedLang && I18N[savedLang]) applyLanguage(savedLang);
+  } catch {}
+});
 
 (function () {
   var nav = document.getElementById("nav-links");
