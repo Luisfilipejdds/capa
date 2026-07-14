@@ -2,10 +2,12 @@ import crypto from "node:crypto";
 import fs from "node:fs/promises";
 import { readFileSync } from "node:fs";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 import express from "express";
 import sharp from "sharp";
 
 const app = express();
+const assetsDir = path.join(path.dirname(fileURLToPath(import.meta.url)), "assets");
 
 const packageVersion = JSON.parse(
   readFileSync(new URL("./package.json", import.meta.url), "utf8")
@@ -40,6 +42,7 @@ const startedAt = Date.now();
 const MODRINTH_URL = "https://modrinth.com/mod/adaptivecaps/versions";
 const CURSEFORGE_URL = "https://www.curseforge.com/minecraft/mc-mods/adaptivecaps/files/all?page=1&pageSize=20&showAlphaFiles=show";
 const SPONSOR_URL = "https://streethosting.com.br/aff/32";
+const DISCORD_USERNAME = "luisfilipejdds7";
 
 // Design compartilhado por todas as paginas HTML do site (publico e admin),
 // pra tudo ter a mesma cara em vez de cada rota reinventar seu proprio CSS.
@@ -101,16 +104,12 @@ a{color:inherit;}
   background-clip:text;
   color:transparent;
 }
-.nav-brand .logo-badge{
-  width:32px;height:32px;
+.nav-brand .logo-img{
+  width:36px;height:36px;
   border-radius:10px;
-  display:flex;align-items:center;justify-content:center;
-  background:linear-gradient(135deg,var(--accent),var(--accent-2));
-  box-shadow:0 4px 16px -4px rgba(49,183,255,.6);
-}
-.nav-brand .logo-badge svg{
-  width:18px;height:18px;
   display:block;
+  object-fit:cover;
+  box-shadow:0 4px 16px -4px rgba(49,183,255,.6);
 }
 .nav-links{
   position:relative;
@@ -392,6 +391,39 @@ h2.section-title .bar{
   font-size:14px;
 }
 .search-box:focus{outline:none;border-color:var(--accent);}
+.contact-card{
+  display:flex;
+  align-items:center;
+  gap:18px;
+  padding:24px;
+  flex-wrap:wrap;
+}
+.contact-card .discord-icon{
+  flex:none;
+  width:48px;height:48px;
+  border-radius:12px;
+  display:flex;align-items:center;justify-content:center;
+  background:rgba(88,101,242,.15);
+  border:1px solid rgba(88,101,242,.35);
+}
+.contact-card .discord-icon svg{width:26px;height:26px;}
+.contact-card .info{flex:1;min-width:200px;}
+.contact-card h3{margin:0 0 4px;font-size:16px;}
+.contact-card p{margin:0;font-size:13px;color:var(--text-muted);}
+.contact-card .username-row{
+  display:flex;
+  align-items:center;
+  gap:10px;
+  flex-wrap:wrap;
+}
+.contact-card .username{
+  font-family:monospace;
+  font-size:14px;
+  background:var(--surface-2);
+  padding:6px 12px;
+  border-radius:8px;
+  border:1px solid var(--border);
+}
 .footer{
   text-align:center;
   color:var(--text-muted);
@@ -440,18 +472,14 @@ function pageShell({ title, activeNav, body, extraHead = "" }) {
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>${title}</title>
+<link rel="icon" type="image/png" href="/assets/logo.png">
 <style>${SITE_STYLES}</style>
 ${extraHead}
 </head>
 <body>
 <nav class="nav">
   <a class="nav-brand" href="/">
-    <span class="logo-badge">
-      <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-        <path d="M12 2C9.2 2 6.7 3.4 5.1 5.9L4 19.2C3.9 20.3 5 21.1 6 20.6L12 17.8L18 20.6C19 21.1 20.1 20.3 20 19.2L18.9 5.9C17.3 3.4 14.8 2 12 2Z" fill="white"/>
-        <path d="M12 2.4V17.8" stroke="rgba(8,16,28,.35)" stroke-width="1.1" stroke-linecap="round"/>
-      </svg>
-    </span>
+    <img class="logo-img" src="/assets/logo.png" alt="AdaptiveCaps">
     <span class="brand-text">AdaptiveCaps</span>
   </a>
   <div class="nav-links" id="nav-links">
@@ -523,6 +551,7 @@ ${body}
 
 app.disable("x-powered-by");
 app.set("trust proxy", true);
+app.use("/assets", express.static(assetsDir, { maxAge: "7d" }));
 app.use(express.json({ limit: `${jsonLimitBytes}b` }));
 
 function computeStats(metadata, totalCapeFiles, storageSizeMb) {
@@ -2309,6 +2338,10 @@ const HOME_I18N = {
     downloadTitle: "Baixe o mod",
     downloadModrinth: "Baixar no Modrinth",
     downloadCurseforge: "Baixar na CurseForge",
+    contactTitle: "Fale com o desenvolvedor",
+    contactDesc: "Duvidas, sugestoes ou problemas? Me chama no Discord.",
+    contactCopy: "Copiar usuario",
+    contactCopied: "Copiado!",
     footer: "AdaptiveCaps Relay"
   },
   en: {
@@ -2382,6 +2415,10 @@ const HOME_I18N = {
     downloadTitle: "Download the mod",
     downloadModrinth: "Download on Modrinth",
     downloadCurseforge: "Download on CurseForge",
+    contactTitle: "Talk to the developer",
+    contactDesc: "Questions, suggestions, or issues? Message me on Discord.",
+    contactCopy: "Copy username",
+    contactCopied: "Copied!",
     footer: "AdaptiveCaps Relay"
   },
   es: {
@@ -2455,6 +2492,10 @@ const HOME_I18N = {
     downloadTitle: "Descarga el mod",
     downloadModrinth: "Descargar en Modrinth",
     downloadCurseforge: "Descargar en CurseForge",
+    contactTitle: "Habla con el desarrollador",
+    contactDesc: "¿Dudas, sugerencias o problemas? Escribeme en Discord.",
+    contactCopy: "Copiar usuario",
+    contactCopied: "¡Copiado!",
     footer: "AdaptiveCaps Relay"
   },
   fr: {
@@ -2528,6 +2569,10 @@ const HOME_I18N = {
     downloadTitle: "Telechargez le mod",
     downloadModrinth: "Telecharger sur Modrinth",
     downloadCurseforge: "Telecharger sur CurseForge",
+    contactTitle: "Parlez au developpeur",
+    contactDesc: "Questions, suggestions ou problemes ? Contactez-moi sur Discord.",
+    contactCopy: "Copier le pseudo",
+    contactCopied: "Copie !",
     footer: "AdaptiveCaps Relay"
   },
   de: {
@@ -2601,6 +2646,10 @@ const HOME_I18N = {
     downloadTitle: "Mod herunterladen",
     downloadModrinth: "Auf Modrinth herunterladen",
     downloadCurseforge: "Auf CurseForge herunterladen",
+    contactTitle: "Sprich mit dem Entwickler",
+    contactDesc: "Fragen, Vorschlaege oder Probleme? Schreib mir auf Discord.",
+    contactCopy: "Benutzernamen kopieren",
+    contactCopied: "Kopiert!",
     footer: "AdaptiveCaps Relay"
   }
 };
@@ -2686,6 +2735,22 @@ function renderHomePage(stats, previewCapes) {
 
   <h2 class="section-title"><span class="bar"></span><span data-i18n="rulesTitle">${escapeHtml(t.rulesTitle)}</span></h2>
   <ul class="card rules-list">${rulesHtml}</ul>
+
+  <div class="card contact-card" style="margin-top:56px">
+    <div class="discord-icon">
+      <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" fill="#5865F2">
+        <path d="M20.3 4.4A19.7 19.7 0 0 0 15.6 3c-.2.4-.5.9-.6 1.3a18.3 18.3 0 0 0-5.9 0c-.2-.4-.4-.9-.6-1.3-1.6.3-3.2.8-4.7 1.4C1 8.7.3 12.9.6 17c1.8 1.3 3.6 2.1 5.3 2.7.4-.6.8-1.2 1.1-1.9-.6-.2-1.2-.5-1.7-.9.1-.1.3-.2.4-.3 3.4 1.6 7 1.6 10.3 0 .1.1.3.2.4.3-.5.3-1.1.6-1.7.9.3.7.7 1.3 1.1 1.9 1.8-.6 3.6-1.4 5.3-2.7.4-4.7-.8-8.9-3.3-12.6ZM8.5 14.4c-1 0-1.8-.9-1.8-2s.8-2 1.8-2 1.8.9 1.8 2-.8 2-1.8 2Zm7 0c-1 0-1.8-.9-1.8-2s.8-2 1.8-2 1.8.9 1.8 2-.8 2-1.8 2Z"/>
+      </svg>
+    </div>
+    <div class="info">
+      <h3 data-i18n="contactTitle">${escapeHtml(t.contactTitle)}</h3>
+      <p data-i18n="contactDesc">${escapeHtml(t.contactDesc)}</p>
+    </div>
+    <div class="username-row">
+      <span class="username" id="discord-username">${escapeHtml(DISCORD_USERNAME)}</span>
+      <button class="btn btn-outline" id="copy-discord-btn" type="button" data-i18n="contactCopy">${escapeHtml(t.contactCopy)}</button>
+    </div>
+  </div>
 </div>
 <script>
 const I18N = ${JSON.stringify(HOME_I18N)};
@@ -2731,6 +2796,27 @@ try {
   const saved = localStorage.getItem("adaptivecaps_lang");
   if (saved && I18N[saved]) applyLanguage(saved);
 } catch {}
+
+const copyBtn = document.getElementById("copy-discord-btn");
+if (copyBtn) {
+  copyBtn.addEventListener("click", async function () {
+    const username = document.getElementById("discord-username").textContent;
+    const originalText = copyBtn.textContent;
+    try {
+      await navigator.clipboard.writeText(username);
+    } catch {
+      const helper = document.createElement("textarea");
+      helper.value = username;
+      document.body.appendChild(helper);
+      helper.select();
+      document.execCommand("copy");
+      document.body.removeChild(helper);
+    }
+    const dict = I18N[document.documentElement.lang] || I18N["pt-BR"];
+    copyBtn.textContent = dict.contactCopied || "Copiado!";
+    setTimeout(function () { copyBtn.textContent = originalText; }, 1800);
+  });
+}
 </script>`;
 
   return pageShell({ title: "AdaptiveCaps", activeNav: "home", body });
