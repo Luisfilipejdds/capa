@@ -37,8 +37,8 @@ const pngSignature = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a
 
 const startedAt = Date.now();
 
-const MODRINTH_URL = "https://modrinth.com/mod/adaptivecaps";
-const CURSEFORGE_URL = "https://www.curseforge.com/minecraft/mc-mods/adaptivecaps";
+const MODRINTH_URL = "https://modrinth.com/mod/adaptivecaps/versions";
+const CURSEFORGE_URL = "https://www.curseforge.com/minecraft/mc-mods/adaptivecaps/files/all?page=1&pageSize=20&showAlphaFiles=show";
 
 // Design compartilhado por todas as paginas HTML do site (publico e admin),
 // pra tudo ter a mesma cara em vez de cada rota reinventar seu proprio CSS.
@@ -180,6 +180,25 @@ h2.section-title .bar{
   margin-top:6px;
   font-size:13px;
   color:var(--text-muted);
+}
+.feature-grid{
+  display:grid;
+  grid-template-columns:repeat(auto-fit,minmax(220px,1fr));
+  gap:18px;
+}
+.feature-card{
+  padding:22px;
+}
+.feature-card h3{
+  font-size:16px;
+  margin:0 0 8px;
+  color:var(--accent);
+}
+.feature-card p{
+  margin:0;
+  font-size:13px;
+  color:var(--text-muted);
+  line-height:1.5;
 }
 .cape-grid{
   display:grid;
@@ -387,12 +406,14 @@ app.use(express.json({ limit: `${jsonLimitBytes}b` }));
 function computeStats(metadata, totalCapeFiles, storageSizeMb) {
   const totalPlayers = Object.keys(metadata).length;
   const visibleCapes = Object.values(metadata).filter(entry => entry?.visible === true).length;
+  const bannedPlayers = Object.values(metadata).filter(entry => entry?.banned === true).length;
   return {
     ok: true,
     version: packageVersion,
     uptimeSeconds: Math.floor((Date.now() - startedAt) / 1000),
     totalPlayers,
     visibleCapes,
+    bannedPlayers,
     totalCapeFiles,
     storageSizeMb: Number(storageSizeMb)
   };
@@ -2088,6 +2109,7 @@ function renderStatusPage(stats) {
     <div class="card stat-tile"><div class="value">${stats.totalPlayers}</div><div class="label">Jogadores registrados</div></div>
     <div class="card stat-tile"><div class="value">${stats.visibleCapes}</div><div class="label">Capas visiveis</div></div>
     <div class="card stat-tile"><div class="value">${stats.totalCapeFiles}</div><div class="label">Arquivos de capa</div></div>
+    <div class="card stat-tile"><div class="value">${stats.bannedPlayers}</div><div class="label">Jogadores banidos</div></div>
   </div>
   <div class="center" style="margin-top:36px">
     <a class="btn btn-outline" href="/capes">Ver galeria de capas</a>
@@ -2102,6 +2124,13 @@ const HOME_I18N = {
     heroBadge: "Sincronizacao de capas em nuvem",
     heroTitle: "AdaptiveCaps",
     heroSubtitle: "Escolha, crie ou gere com IA a capa do seu personagem, e leve ela pra qualquer servidor que voce jogar.",
+    featuresTitle: "Recursos",
+    features: [
+      { title: "Gerador com IA", desc: "Descreva o que quiser e gere uma capa unica, de graca." },
+      { title: "Biblioteca com slots", desc: "Salve ate 5 capas e troque entre elas quando quiser." },
+      { title: "Sincronia em nuvem", desc: "Sua capa aparece em qualquer servidor que tenha o mod." },
+      { title: "100% gratuito", desc: "Sem assinatura, sem anuncio, sem pegadinha." }
+    ],
     statsTitle: "Em numeros",
     statOnline: "Online",
     statPlayers: "Jogadores",
@@ -2111,14 +2140,45 @@ const HOME_I18N = {
     galleryDesc: "Uma amostra das capas que os jogadores deixaram publicas.",
     galleryCta: "Ver galeria completa",
     galleryEmpty: "Nenhuma capa publica ainda. Seja o primeiro a compartilhar a sua!",
-    tutorialTitle: "Como instalar e usar",
-    tutorialSteps: [
-      { title: "Instale o mod loader", desc: "Baixe e instale o Fabric ou o NeoForge, de acordo com a versao do Minecraft que voce usa." },
-      { title: "Baixe o AdaptiveCaps", desc: "Pegue o arquivo do mod no Modrinth ou na CurseForge (links abaixo) e coloque na pasta \"mods\" da sua instalacao." },
-      { title: "Abra o Minecraft", desc: "Inicie o jogo normalmente e entre em qualquer mundo ou servidor." },
-      { title: "Abra o menu da capa", desc: "Use a tecla de atalho do AdaptiveCaps (configuravel em Opcoes > Controles) para abrir a tela de personalizacao." },
-      { title: "Escolha ou crie sua capa", desc: "Selecione uma capa pronta, envie uma imagem sua, ou gere uma nova com o assistente de IA." },
-      { title: "Ative a visibilidade", desc: "Marque sua capa como \"visivel\" para que outros jogadores com o mod te vejam com ela em qualquer servidor." }
+    tutorialTitle: "Tutoriais",
+    tutorialGroups: [
+      {
+        groupTitle: "1. Instalando o mod",
+        steps: [
+          { title: "Instale o mod loader", desc: "Baixe e instale o Fabric ou o NeoForge, de acordo com a versao do Minecraft que voce usa." },
+          { title: "Baixe o AdaptiveCaps", desc: "Pegue o arquivo do mod no Modrinth ou na CurseForge (links abaixo) e coloque na pasta \"mods\" da sua instalacao." },
+          { title: "Abra o jogo e o menu da capa", desc: "Entre em qualquer mundo/servidor e use a tecla de atalho do AdaptiveCaps (configuravel em Opcoes > Controles) pra abrir a tela de personalizacao." }
+        ]
+      },
+      {
+        groupTitle: "2. Enviando uma imagem para a capa",
+        steps: [
+          { title: "Abra a aba de imagem", desc: "Na tela de personalizacao, va na aba de enviar imagem (upload)." },
+          { title: "Escolha o arquivo", desc: "Selecione uma imagem do seu computador (PNG, JPG, WEBP ou GIF animado)." },
+          { title: "Aplique e confirme", desc: "O mod redimensiona a imagem automaticamente pro formato de capa (64x32). Confirme pra aplicar." },
+          { title: "Ative a visibilidade", desc: "Marque a capa como \"visivel\" pra ela sincronizar com a nuvem e aparecer pros outros jogadores." }
+        ]
+      },
+      {
+        groupTitle: "3. Gerando uma capa com IA",
+        steps: [
+          { title: "Abra a aba de IA", desc: "Na tela de personalizacao, va na aba do gerador por IA." },
+          { title: "Descreva o que voce quer", desc: "Digite um texto curto descrevendo a ideia, tipo \"um dragao vermelho\" ou \"uma casa na floresta\"." },
+          { title: "Escolha estilo, cor e qualidade", desc: "Ajuste as opcoes de estilo (anime, pixel art, fantasia, cyber), cor principal e qualidade pra guiar o resultado." },
+          { title: "Gere e aguarde", desc: "Clique em gerar. Leva poucos segundos. Se nao gostar do resultado, so gerar de novo com outro texto ou opcoes." },
+          { title: "Aplique a capa", desc: "Gostou do resultado? Aplique e ative a visibilidade pra sincronizar com a nuvem." }
+        ]
+      },
+      {
+        groupTitle: "4. Salvando capas na biblioteca (slots)",
+        steps: [
+          { title: "Abra a aba de biblioteca", desc: "Na tela de personalizacao, va na aba de biblioteca/slots." },
+          { title: "Salve a capa atual num slot", desc: "Voce tem ate 5 slots pra guardar capas diferentes (enviadas ou geradas por IA)." },
+          { title: "De um nome ao slot", desc: "Nomeie cada slot pra lembrar qual capa e qual depois (ex.: \"Dragao\", \"Time X\")." },
+          { title: "Troque de capa quando quiser", desc: "Selecione outro slot a qualquer momento pra trocar de capa na hora, sem precisar reenviar ou gerar de novo." },
+          { title: "Seus slots ficam salvos na nuvem", desc: "Ao reinstalar o mod ou trocar de PC, seus slots salvos sao restaurados automaticamente." }
+        ]
+      }
     ],
     rulesTitle: "Regras de uso",
     rules: [
@@ -2137,6 +2197,13 @@ const HOME_I18N = {
     heroBadge: "Cloud cape sync",
     heroTitle: "AdaptiveCaps",
     heroSubtitle: "Pick, create, or AI-generate your character's cape, and bring it to any server you play on.",
+    featuresTitle: "Features",
+    features: [
+      { title: "AI generator", desc: "Describe anything and generate a unique cape, for free." },
+      { title: "Slot library", desc: "Save up to 5 capes and switch between them anytime." },
+      { title: "Cloud sync", desc: "Your cape shows up on any server that has the mod." },
+      { title: "100% free", desc: "No subscription, no ads, no catch." }
+    ],
     statsTitle: "By the numbers",
     statOnline: "Online",
     statPlayers: "Players",
@@ -2146,14 +2213,45 @@ const HOME_I18N = {
     galleryDesc: "A sample of the capes players have made public.",
     galleryCta: "See full gallery",
     galleryEmpty: "No public capes yet. Be the first to share yours!",
-    tutorialTitle: "How to install and use",
-    tutorialSteps: [
-      { title: "Install a mod loader", desc: "Download and install Fabric or NeoForge, matching your Minecraft version." },
-      { title: "Download AdaptiveCaps", desc: "Get the mod file from Modrinth or CurseForge (links below) and put it in your \"mods\" folder." },
-      { title: "Launch Minecraft", desc: "Start the game normally and join any world or server." },
-      { title: "Open the cape menu", desc: "Use the AdaptiveCaps keybind (configurable in Options > Controls) to open the customization screen." },
-      { title: "Pick or create your cape", desc: "Choose a preset cape, upload your own image, or generate a new one with the AI assistant." },
-      { title: "Turn on visibility", desc: "Mark your cape as \"visible\" so other players with the mod see it on any server." }
+    tutorialTitle: "Tutorials",
+    tutorialGroups: [
+      {
+        groupTitle: "1. Installing the mod",
+        steps: [
+          { title: "Install a mod loader", desc: "Download and install Fabric or NeoForge, matching your Minecraft version." },
+          { title: "Download AdaptiveCaps", desc: "Get the mod file from Modrinth or CurseForge (links below) and put it in your \"mods\" folder." },
+          { title: "Launch the game and open the cape menu", desc: "Join any world/server and use the AdaptiveCaps keybind (configurable in Options > Controls) to open the customization screen." }
+        ]
+      },
+      {
+        groupTitle: "2. Uploading an image to your cape",
+        steps: [
+          { title: "Open the image tab", desc: "In the customization screen, go to the image upload tab." },
+          { title: "Choose the file", desc: "Select an image from your computer (PNG, JPG, WEBP, or animated GIF)." },
+          { title: "Apply and confirm", desc: "The mod automatically resizes the image to the cape format (64x32). Confirm to apply it." },
+          { title: "Turn on visibility", desc: "Mark the cape as \"visible\" so it syncs to the cloud and shows up for other players." }
+        ]
+      },
+      {
+        groupTitle: "3. Generating a cape with AI",
+        steps: [
+          { title: "Open the AI tab", desc: "In the customization screen, go to the AI generator tab." },
+          { title: "Describe what you want", desc: "Type a short description of your idea, like \"a red dragon\" or \"a house in the forest\"." },
+          { title: "Pick style, color, and quality", desc: "Adjust the style (anime, pixel art, fantasy, cyber), main color, and quality options to guide the result." },
+          { title: "Generate and wait", desc: "Click generate. It takes a few seconds. Not happy with it? Just generate again with different text or options." },
+          { title: "Apply the cape", desc: "Like the result? Apply it and turn on visibility to sync it to the cloud." }
+        ]
+      },
+      {
+        groupTitle: "4. Saving capes in the library (slots)",
+        steps: [
+          { title: "Open the library tab", desc: "In the customization screen, go to the library/slots tab." },
+          { title: "Save the current cape to a slot", desc: "You get up to 5 slots to store different capes (uploaded or AI-generated)." },
+          { title: "Name the slot", desc: "Give each slot a name so you remember which cape is which later (e.g. \"Dragon\", \"Team X\")." },
+          { title: "Switch capes anytime", desc: "Select a different slot whenever you want to switch capes instantly, without re-uploading or regenerating." },
+          { title: "Your slots are backed up to the cloud", desc: "If you reinstall the mod or switch computers, your saved slots are restored automatically." }
+        ]
+      }
     ],
     rulesTitle: "Usage rules",
     rules: [
@@ -2172,6 +2270,13 @@ const HOME_I18N = {
     heroBadge: "Sincronizacion de capas en la nube",
     heroTitle: "AdaptiveCaps",
     heroSubtitle: "Elige, crea o genera con IA la capa de tu personaje, y llevala a cualquier servidor donde juegues.",
+    featuresTitle: "Funciones",
+    features: [
+      { title: "Generador con IA", desc: "Describe lo que quieras y genera una capa unica, gratis." },
+      { title: "Biblioteca con slots", desc: "Guarda hasta 5 capas y cambia entre ellas cuando quieras." },
+      { title: "Sincronizacion en la nube", desc: "Tu capa aparece en cualquier servidor que tenga el mod." },
+      { title: "100% gratis", desc: "Sin suscripcion, sin anuncios, sin trucos." }
+    ],
     statsTitle: "En numeros",
     statOnline: "En linea",
     statPlayers: "Jugadores",
@@ -2181,14 +2286,45 @@ const HOME_I18N = {
     galleryDesc: "Una muestra de las capas que los jugadores hicieron publicas.",
     galleryCta: "Ver galeria completa",
     galleryEmpty: "Aun no hay capas publicas. ¡Se el primero en compartir la tuya!",
-    tutorialTitle: "Como instalar y usar",
-    tutorialSteps: [
-      { title: "Instala un mod loader", desc: "Descarga e instala Fabric o NeoForge, segun tu version de Minecraft." },
-      { title: "Descarga AdaptiveCaps", desc: "Obten el archivo del mod en Modrinth o CurseForge (enlaces abajo) y ponlo en tu carpeta \"mods\"." },
-      { title: "Abre Minecraft", desc: "Inicia el juego normalmente y entra a cualquier mundo o servidor." },
-      { title: "Abre el menu de la capa", desc: "Usa el atajo de AdaptiveCaps (configurable en Opciones > Controles) para abrir la pantalla de personalizacion." },
-      { title: "Elige o crea tu capa", desc: "Selecciona una capa lista, sube tu propia imagen, o genera una nueva con el asistente de IA." },
-      { title: "Activa la visibilidad", desc: "Marca tu capa como \"visible\" para que otros jugadores con el mod te vean en cualquier servidor." }
+    tutorialTitle: "Tutoriales",
+    tutorialGroups: [
+      {
+        groupTitle: "1. Instalando el mod",
+        steps: [
+          { title: "Instala un mod loader", desc: "Descarga e instala Fabric o NeoForge, segun tu version de Minecraft." },
+          { title: "Descarga AdaptiveCaps", desc: "Obten el archivo del mod en Modrinth o CurseForge (enlaces abajo) y ponlo en tu carpeta \"mods\"." },
+          { title: "Abre el juego y el menu de la capa", desc: "Entra a cualquier mundo/servidor y usa el atajo de AdaptiveCaps (configurable en Opciones > Controles) para abrir la pantalla de personalizacion." }
+        ]
+      },
+      {
+        groupTitle: "2. Subiendo una imagen a tu capa",
+        steps: [
+          { title: "Abre la pestana de imagen", desc: "En la pantalla de personalizacion, ve a la pestana de subir imagen." },
+          { title: "Elige el archivo", desc: "Selecciona una imagen de tu computadora (PNG, JPG, WEBP o GIF animado)." },
+          { title: "Aplica y confirma", desc: "El mod redimensiona la imagen automaticamente al formato de capa (64x32). Confirma para aplicarla." },
+          { title: "Activa la visibilidad", desc: "Marca la capa como \"visible\" para que se sincronice con la nube y la vean otros jugadores." }
+        ]
+      },
+      {
+        groupTitle: "3. Generando una capa con IA",
+        steps: [
+          { title: "Abre la pestana de IA", desc: "En la pantalla de personalizacion, ve a la pestana del generador de IA." },
+          { title: "Describe lo que quieres", desc: "Escribe una breve descripcion de tu idea, como \"un dragon rojo\" o \"una casa en el bosque\"." },
+          { title: "Elige estilo, color y calidad", desc: "Ajusta el estilo (anime, pixel art, fantasia, cyber), el color principal y la calidad para guiar el resultado." },
+          { title: "Genera y espera", desc: "Haz clic en generar. Tarda unos segundos. ¿No te gusto? Genera de nuevo con otro texto u opciones." },
+          { title: "Aplica la capa", desc: "¿Te gusto el resultado? Aplicalo y activa la visibilidad para sincronizarlo con la nube." }
+        ]
+      },
+      {
+        groupTitle: "4. Guardando capas en la biblioteca (slots)",
+        steps: [
+          { title: "Abre la pestana de biblioteca", desc: "En la pantalla de personalizacion, ve a la pestana de biblioteca/slots." },
+          { title: "Guarda la capa actual en un slot", desc: "Tienes hasta 5 slots para guardar diferentes capas (subidas o generadas por IA)." },
+          { title: "Nombra el slot", desc: "Dale un nombre a cada slot para recordar cual capa es cual despues (ej.: \"Dragon\", \"Equipo X\")." },
+          { title: "Cambia de capa cuando quieras", desc: "Selecciona otro slot en cualquier momento para cambiar de capa al instante, sin volver a subir o generar." },
+          { title: "Tus slots quedan respaldados en la nube", desc: "Si reinstalas el mod o cambias de computadora, tus slots guardados se restauran automaticamente." }
+        ]
+      }
     ],
     rulesTitle: "Reglas de uso",
     rules: [
@@ -2207,6 +2343,13 @@ const HOME_I18N = {
     heroBadge: "Synchronisation de capes dans le cloud",
     heroTitle: "AdaptiveCaps",
     heroSubtitle: "Choisissez, creez ou generez avec l'IA la cape de votre personnage, et emportez-la sur n'importe quel serveur.",
+    featuresTitle: "Fonctionnalites",
+    features: [
+      { title: "Generateur IA", desc: "Decrivez ce que vous voulez et generez une cape unique, gratuitement." },
+      { title: "Bibliotheque a emplacements", desc: "Sauvegardez jusqu'a 5 capes et changez entre elles a tout moment." },
+      { title: "Synchronisation cloud", desc: "Votre cape apparait sur n'importe quel serveur ayant le mod." },
+      { title: "100% gratuit", desc: "Sans abonnement, sans pub, sans piege." }
+    ],
     statsTitle: "En chiffres",
     statOnline: "En ligne",
     statPlayers: "Joueurs",
@@ -2216,14 +2359,45 @@ const HOME_I18N = {
     galleryDesc: "Un apercu des capes que les joueurs ont rendues publiques.",
     galleryCta: "Voir la galerie complete",
     galleryEmpty: "Pas encore de cape publique. Soyez le premier a partager la votre !",
-    tutorialTitle: "Comment installer et utiliser",
-    tutorialSteps: [
-      { title: "Installez un mod loader", desc: "Telechargez et installez Fabric ou NeoForge, selon votre version de Minecraft." },
-      { title: "Telechargez AdaptiveCaps", desc: "Recuperez le fichier du mod sur Modrinth ou CurseForge (liens ci-dessous) et placez-le dans le dossier \"mods\"." },
-      { title: "Lancez Minecraft", desc: "Demarrez le jeu normalement et rejoignez un monde ou un serveur." },
-      { title: "Ouvrez le menu de la cape", desc: "Utilisez le raccourci AdaptiveCaps (configurable dans Options > Commandes) pour ouvrir l'ecran de personnalisation." },
-      { title: "Choisissez ou creez votre cape", desc: "Selectionnez une cape existante, envoyez votre propre image, ou generez-en une avec l'assistant IA." },
-      { title: "Activez la visibilite", desc: "Marquez votre cape comme \"visible\" pour que les autres joueurs avec le mod la voient sur n'importe quel serveur." }
+    tutorialTitle: "Tutoriels",
+    tutorialGroups: [
+      {
+        groupTitle: "1. Installer le mod",
+        steps: [
+          { title: "Installez un mod loader", desc: "Telechargez et installez Fabric ou NeoForge, selon votre version de Minecraft." },
+          { title: "Telechargez AdaptiveCaps", desc: "Recuperez le fichier du mod sur Modrinth ou CurseForge (liens ci-dessous) et placez-le dans le dossier \"mods\"." },
+          { title: "Lancez le jeu et ouvrez le menu de la cape", desc: "Rejoignez un monde/serveur et utilisez le raccourci AdaptiveCaps (configurable dans Options > Commandes) pour ouvrir l'ecran de personnalisation." }
+        ]
+      },
+      {
+        groupTitle: "2. Envoyer une image sur votre cape",
+        steps: [
+          { title: "Ouvrez l'onglet image", desc: "Dans l'ecran de personnalisation, allez dans l'onglet d'envoi d'image." },
+          { title: "Choisissez le fichier", desc: "Selectionnez une image depuis votre ordinateur (PNG, JPG, WEBP ou GIF anime)." },
+          { title: "Appliquez et confirmez", desc: "Le mod redimensionne automatiquement l'image au format de cape (64x32). Confirmez pour l'appliquer." },
+          { title: "Activez la visibilite", desc: "Marquez la cape comme \"visible\" pour qu'elle se synchronise avec le cloud et soit visible par les autres joueurs." }
+        ]
+      },
+      {
+        groupTitle: "3. Generer une cape avec l'IA",
+        steps: [
+          { title: "Ouvrez l'onglet IA", desc: "Dans l'ecran de personnalisation, allez dans l'onglet du generateur IA." },
+          { title: "Decrivez ce que vous voulez", desc: "Ecrivez une courte description de votre idee, comme \"un dragon rouge\" ou \"une maison dans la foret\"." },
+          { title: "Choisissez style, couleur et qualite", desc: "Ajustez le style (anime, pixel art, fantastique, cyber), la couleur principale et la qualite pour guider le resultat." },
+          { title: "Generez et patientez", desc: "Cliquez sur generer. Cela prend quelques secondes. Pas satisfait ? Regenerez avec un autre texte ou d'autres options." },
+          { title: "Appliquez la cape", desc: "Le resultat vous plait ? Appliquez-le et activez la visibilite pour le synchroniser avec le cloud." }
+        ]
+      },
+      {
+        groupTitle: "4. Sauvegarder des capes dans la bibliotheque (emplacements)",
+        steps: [
+          { title: "Ouvrez l'onglet bibliotheque", desc: "Dans l'ecran de personnalisation, allez dans l'onglet bibliotheque/emplacements." },
+          { title: "Sauvegardez la cape actuelle dans un emplacement", desc: "Vous avez jusqu'a 5 emplacements pour stocker differentes capes (envoyees ou generees par IA)." },
+          { title: "Nommez l'emplacement", desc: "Donnez un nom a chaque emplacement pour vous souvenir de quelle cape il s'agit (ex. : \"Dragon\", \"Equipe X\")." },
+          { title: "Changez de cape a tout moment", desc: "Selectionnez un autre emplacement quand vous voulez changer de cape instantanement, sans reenvoyer ni regenerer." },
+          { title: "Vos emplacements sont sauvegardes dans le cloud", desc: "Si vous reinstallez le mod ou changez d'ordinateur, vos emplacements sauvegardes sont restaures automatiquement." }
+        ]
+      }
     ],
     rulesTitle: "Regles d'utilisation",
     rules: [
@@ -2242,6 +2416,13 @@ const HOME_I18N = {
     heroBadge: "Cloud-Umhang-Synchronisierung",
     heroTitle: "AdaptiveCaps",
     heroSubtitle: "Wahle, erstelle oder generiere per KI den Umhang deiner Spielfigur und nimm ihn mit auf jeden Server.",
+    featuresTitle: "Funktionen",
+    features: [
+      { title: "KI-Generator", desc: "Beschreibe, was du willst, und generiere kostenlos einen einzigartigen Umhang." },
+      { title: "Slot-Bibliothek", desc: "Speichere bis zu 5 Umhaenge und wechsle jederzeit zwischen ihnen." },
+      { title: "Cloud-Synchronisierung", desc: "Dein Umhang erscheint auf jedem Server mit der Mod." },
+      { title: "100% kostenlos", desc: "Kein Abo, keine Werbung, kein Haken." }
+    ],
     statsTitle: "In Zahlen",
     statOnline: "Online",
     statPlayers: "Spieler",
@@ -2251,14 +2432,45 @@ const HOME_I18N = {
     galleryDesc: "Eine Auswahl der Umhaenge, die Spieler oeffentlich gemacht haben.",
     galleryCta: "Vollstaendige Galerie ansehen",
     galleryEmpty: "Noch keine oeffentlichen Umhaenge. Sei der Erste, der seinen teilt!",
-    tutorialTitle: "Installation und Nutzung",
-    tutorialSteps: [
-      { title: "Mod-Loader installieren", desc: "Lade Fabric oder NeoForge passend zu deiner Minecraft-Version herunter und installiere es." },
-      { title: "AdaptiveCaps herunterladen", desc: "Lade die Mod-Datei von Modrinth oder CurseForge (Links unten) herunter und lege sie in deinen \"mods\"-Ordner." },
-      { title: "Minecraft starten", desc: "Starte das Spiel normal und betrete eine beliebige Welt oder einen Server." },
-      { title: "Umhang-Menue oeffnen", desc: "Benutze die AdaptiveCaps-Taste (einstellbar unter Optionen > Steuerung), um den Anpassungsbildschirm zu oeffnen." },
-      { title: "Umhang waehlen oder erstellen", desc: "Waehle einen vorhandenen Umhang, lade ein eigenes Bild hoch, oder generiere einen neuen mit dem KI-Assistenten." },
-      { title: "Sichtbarkeit aktivieren", desc: "Markiere deinen Umhang als \"sichtbar\", damit andere Spieler mit der Mod ihn auf jedem Server sehen." }
+    tutorialTitle: "Anleitungen",
+    tutorialGroups: [
+      {
+        groupTitle: "1. Mod installieren",
+        steps: [
+          { title: "Mod-Loader installieren", desc: "Lade Fabric oder NeoForge passend zu deiner Minecraft-Version herunter und installiere es." },
+          { title: "AdaptiveCaps herunterladen", desc: "Lade die Mod-Datei von Modrinth oder CurseForge (Links unten) herunter und lege sie in deinen \"mods\"-Ordner." },
+          { title: "Spiel starten und Umhang-Menue oeffnen", desc: "Betrete eine Welt/einen Server und benutze die AdaptiveCaps-Taste (einstellbar unter Optionen > Steuerung), um den Anpassungsbildschirm zu oeffnen." }
+        ]
+      },
+      {
+        groupTitle: "2. Ein Bild auf deinen Umhang hochladen",
+        steps: [
+          { title: "Bild-Tab oeffnen", desc: "Gehe im Anpassungsbildschirm zum Tab fuer Bild-Upload." },
+          { title: "Datei auswaehlen", desc: "Waehle ein Bild von deinem Computer (PNG, JPG, WEBP oder animiertes GIF)." },
+          { title: "Anwenden und bestaetigen", desc: "Die Mod skaliert das Bild automatisch auf das Umhang-Format (64x32). Bestaetige, um es anzuwenden." },
+          { title: "Sichtbarkeit aktivieren", desc: "Markiere den Umhang als \"sichtbar\", damit er mit der Cloud synchronisiert und fuer andere Spieler sichtbar wird." }
+        ]
+      },
+      {
+        groupTitle: "3. Einen Umhang mit KI generieren",
+        steps: [
+          { title: "KI-Tab oeffnen", desc: "Gehe im Anpassungsbildschirm zum Tab des KI-Generators." },
+          { title: "Beschreibe, was du willst", desc: "Schreibe eine kurze Beschreibung deiner Idee, z. B. \"ein roter Drache\" oder \"ein Haus im Wald\"." },
+          { title: "Stil, Farbe und Qualitaet waehlen", desc: "Passe Stil (Anime, Pixel-Art, Fantasy, Cyber), Hauptfarbe und Qualitaet an, um das Ergebnis zu steuern." },
+          { title: "Generieren und warten", desc: "Klicke auf Generieren. Es dauert nur wenige Sekunden. Gefaellt es dir nicht? Generiere einfach mit anderem Text oder Optionen neu." },
+          { title: "Umhang anwenden", desc: "Gefaellt dir das Ergebnis? Wende es an und aktiviere die Sichtbarkeit, um es mit der Cloud zu synchronisieren." }
+        ]
+      },
+      {
+        groupTitle: "4. Umhaenge in der Bibliothek speichern (Slots)",
+        steps: [
+          { title: "Bibliotheks-Tab oeffnen", desc: "Gehe im Anpassungsbildschirm zum Tab Bibliothek/Slots." },
+          { title: "Aktuellen Umhang in einem Slot speichern", desc: "Du hast bis zu 5 Slots, um verschiedene Umhaenge zu speichern (hochgeladen oder per KI generiert)." },
+          { title: "Slot benennen", desc: "Gib jedem Slot einen Namen, damit du spaeter weisst, welcher Umhang welcher ist (z. B. \"Drache\", \"Team X\")." },
+          { title: "Jederzeit Umhang wechseln", desc: "Waehle jederzeit einen anderen Slot, um sofort den Umhang zu wechseln, ohne erneut hochzuladen oder zu generieren." },
+          { title: "Deine Slots werden in der Cloud gesichert", desc: "Wenn du die Mod neu installierst oder den Computer wechselst, werden deine gespeicherten Slots automatisch wiederhergestellt." }
+        ]
+      }
     ],
     rulesTitle: "Nutzungsregeln",
     rules: [
@@ -2290,12 +2502,24 @@ function renderHomePage(stats, previewCapes) {
       }).join("")
     : `<p class="msg" data-i18n="galleryEmpty">${escapeHtml(t.galleryEmpty)}</p>`;
 
-  const tutorialHtml = t.tutorialSteps.map((step, index) => `
-    <div class="card step">
-      <div class="num">${index + 1}</div>
-      <div>
-        <h4 data-i18n-step="${index}:title">${escapeHtml(step.title)}</h4>
-        <p data-i18n-step="${index}:desc">${escapeHtml(step.desc)}</p>
+  const featuresHtml = t.features.map((feature, index) => `
+    <div class="card feature-card">
+      <h3 data-i18n-feature="${index}:title">${escapeHtml(feature.title)}</h3>
+      <p data-i18n-feature="${index}:desc">${escapeHtml(feature.desc)}</p>
+    </div>`).join("");
+
+  const tutorialHtml = t.tutorialGroups.map((group, groupIndex) => `
+    <div class="tutorial-group" style="margin-bottom:32px">
+      <h3 data-i18n-group="${groupIndex}:groupTitle" style="font-size:18px;margin:0 0 16px;color:var(--accent)">${escapeHtml(group.groupTitle)}</h3>
+      <div class="tutorial-steps">
+        ${group.steps.map((step, stepIndex) => `
+        <div class="card step">
+          <div class="num">${stepIndex + 1}</div>
+          <div>
+            <h4 data-i18n-group="${groupIndex}:${stepIndex}:title">${escapeHtml(step.title)}</h4>
+            <p data-i18n-group="${groupIndex}:${stepIndex}:desc">${escapeHtml(step.desc)}</p>
+          </div>
+        </div>`).join("")}
       </div>
     </div>`).join("");
 
@@ -2315,10 +2539,13 @@ function renderHomePage(stats, previewCapes) {
       <button data-lang="de">DE</button>
     </div>
     <div class="download-row">
-      <a class="btn btn-primary" href="${MODRINTH_URL}" target="_blank" rel="noopener" data-i18n="downloadModrinth">${escapeHtml(t.downloadModrinth)}</a>
-      <a class="btn btn-outline" href="${CURSEFORGE_URL}" target="_blank" rel="noopener" data-i18n="downloadCurseforge">${escapeHtml(t.downloadCurseforge)}</a>
+      <a class="btn btn-primary" href="${escapeHtml(MODRINTH_URL)}" target="_blank" rel="noopener" data-i18n="downloadModrinth">${escapeHtml(t.downloadModrinth)}</a>
+      <a class="btn btn-outline" href="${escapeHtml(CURSEFORGE_URL)}" target="_blank" rel="noopener" data-i18n="downloadCurseforge">${escapeHtml(t.downloadCurseforge)}</a>
     </div>
   </div>
+
+  <h2 class="section-title"><span class="bar"></span><span data-i18n="featuresTitle">${escapeHtml(t.featuresTitle)}</span></h2>
+  <div class="feature-grid">${featuresHtml}</div>
 
   <h2 class="section-title"><span class="bar"></span><span data-i18n="statsTitle">${escapeHtml(t.statsTitle)}</span></h2>
   <div class="stat-grid">
@@ -2337,7 +2564,7 @@ function renderHomePage(stats, previewCapes) {
   </div>
 
   <h2 class="section-title"><span class="bar"></span><span data-i18n="tutorialTitle">${escapeHtml(t.tutorialTitle)}</span></h2>
-  <div class="tutorial-steps">${tutorialHtml}</div>
+  <div>${tutorialHtml}</div>
 
   <h2 class="section-title"><span class="bar"></span><span data-i18n="rulesTitle">${escapeHtml(t.rulesTitle)}</span></h2>
   <ul class="card rules-list">${rulesHtml}</ul>
@@ -2353,10 +2580,21 @@ function applyLanguage(lang) {
     const key = el.getAttribute("data-i18n");
     if (dict[key] !== undefined) el.textContent = dict[key];
   });
-  document.querySelectorAll("[data-i18n-step]").forEach(function (el) {
-    const [index, field] = el.getAttribute("data-i18n-step").split(":");
-    const step = dict.tutorialSteps && dict.tutorialSteps[Number(index)];
-    if (step && step[field] !== undefined) el.textContent = step[field];
+  document.querySelectorAll("[data-i18n-feature]").forEach(function (el) {
+    const [index, field] = el.getAttribute("data-i18n-feature").split(":");
+    const feature = dict.features && dict.features[Number(index)];
+    if (feature && feature[field] !== undefined) el.textContent = feature[field];
+  });
+  document.querySelectorAll("[data-i18n-group]").forEach(function (el) {
+    const parts = el.getAttribute("data-i18n-group").split(":");
+    const group = dict.tutorialGroups && dict.tutorialGroups[Number(parts[0])];
+    if (!group) return;
+    if (parts.length === 2 && parts[1] === "groupTitle") {
+      el.textContent = group.groupTitle;
+    } else if (parts.length === 3) {
+      const step = group.steps && group.steps[Number(parts[1])];
+      if (step && step[parts[2]] !== undefined) el.textContent = step[parts[2]];
+    }
   });
   document.querySelectorAll("[data-i18n-rule]").forEach(function (el) {
     const index = Number(el.getAttribute("data-i18n-rule"));
