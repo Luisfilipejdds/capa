@@ -860,6 +860,10 @@ app.get("/capes", (req, res) => {
     <p data-i18n="capesPageDesc">${escapeHtml(t.capesPageDesc)}</p>
   </div>
   <input class="search-box" id="search" type="text" placeholder="${escapeHtml(t.searchPlaceholder)}">
+  <label class="center" style="display:flex;align-items:center;justify-content:center;gap:8px;margin-bottom:20px;font-size:13px;color:var(--text-muted);cursor:pointer">
+    <input type="checkbox" id="original-only" checked>
+    <span id="original-only-label" data-i18n="originalOnlyLabel">${escapeHtml(t.originalOnlyLabel)}</span>
+  </label>
   <div id="content" class="cape-grid" style="margin-top:8px"><p class="msg center">${escapeHtml(t.loadingText)}</p></div>
 </div>
 <script>
@@ -921,13 +925,22 @@ function renderCapes(capes) {
 }
 
 function currentFiltered() {
-  return lastQuery
-    ? allCapes.filter(entry => String(entry.username || "").toLowerCase().includes(lastQuery))
-    : allCapes;
+  let result = allCapes;
+  if (document.getElementById("original-only").checked) {
+    result = result.filter(entry => entry.hasOriginal);
+  }
+  if (lastQuery) {
+    result = result.filter(entry => String(entry.username || "").toLowerCase().includes(lastQuery));
+  }
+  return result;
 }
 
 document.getElementById("search").addEventListener("input", function (event) {
   lastQuery = event.target.value.trim().toLowerCase();
+  renderCapes(currentFiltered());
+});
+
+document.getElementById("original-only").addEventListener("change", function () {
   renderCapes(currentFiltered());
 });
 
@@ -2455,6 +2468,7 @@ const SITE_I18N = {
     capesPageTitle: "Galeria de Capas",
     capesPageDesc: "Todas as capas que os jogadores deixaram públicas.",
     searchPlaceholder: "Buscar por nome do jogador...",
+    originalOnlyLabel: "Mostrar só quem tem imagem original",
     loadingText: "Carregando...",
     errorLoadingText: "Falha ao carregar (status ",
     noneFoundText: "Nenhuma capa encontrada.",
@@ -2550,6 +2564,7 @@ const SITE_I18N = {
     capesPageTitle: "Cape Gallery",
     capesPageDesc: "All the capes players have made public.",
     searchPlaceholder: "Search by player name...",
+    originalOnlyLabel: "Show only players with an original image",
     loadingText: "Loading...",
     errorLoadingText: "Failed to load (status ",
     noneFoundText: "No capes found.",
@@ -2645,6 +2660,7 @@ const SITE_I18N = {
     capesPageTitle: "Galería de Capas",
     capesPageDesc: "Todas las capas que los jugadores hicieron públicas.",
     searchPlaceholder: "Buscar por nombre del jugador...",
+    originalOnlyLabel: "Mostrar solo con imagen original",
     loadingText: "Cargando...",
     errorLoadingText: "Fallo al cargar (status ",
     noneFoundText: "No se encontraron capas.",
@@ -2740,6 +2756,7 @@ const SITE_I18N = {
     capesPageTitle: "Galerie de Capes",
     capesPageDesc: "Toutes les capes que les joueurs ont rendues publiques.",
     searchPlaceholder: "Rechercher par nom de joueur...",
+    originalOnlyLabel: "Afficher seulement avec une image originale",
     loadingText: "Chargement...",
     errorLoadingText: "Échec du chargement (status ",
     noneFoundText: "Aucune cape trouvée.",
@@ -2835,6 +2852,7 @@ const SITE_I18N = {
     capesPageTitle: "Umhang-Galerie",
     capesPageDesc: "Alle Umhänge, die Spieler öffentlich gemacht haben.",
     searchPlaceholder: "Nach Spielername suchen...",
+    originalOnlyLabel: "Nur mit Originalbild anzeigen",
     loadingText: "Wird geladen...",
     errorLoadingText: "Laden fehlgeschlagen (status ",
     noneFoundText: "Keine Umhänge gefunden.",
