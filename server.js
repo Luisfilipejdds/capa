@@ -891,7 +891,7 @@ async function loadCapes() {
 
     const data = await response.json();
     allCapes = data.capes || [];
-    renderCapes(allCapes);
+    renderCapes(currentFiltered());
   } catch (error) {
     content.innerHTML = '<p class="msg center">Erro: ' + escapeHtml(error.message) + '</p>';
   }
