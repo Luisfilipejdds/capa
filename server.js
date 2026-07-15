@@ -369,26 +369,28 @@ h2.section-title .bar{
   border-left:1px solid var(--border);
 }
 .lang-switch button{
-  width:28px;height:28px;
+  width:26px;height:20px;
   padding:0;
-  border-radius:8px;
-  border:1px solid transparent;
+  border-radius:4px;
+  border:1px solid var(--border);
   background:transparent;
-  font-size:15px;
-  line-height:1;
   cursor:pointer;
-  opacity:.6;
+  opacity:.55;
   transition:.15s;
   display:flex;align-items:center;justify-content:center;
+  overflow:hidden;
+}
+.lang-switch button svg{
+  width:100%;height:100%;
+  display:block;
 }
 .lang-switch button:hover{
   opacity:1;
-  background:var(--surface-2);
 }
 .lang-switch button.active{
   opacity:1;
-  border-color:rgba(49,183,255,.4);
-  background:rgba(49,183,255,.1);
+  border-color:rgba(49,183,255,.6);
+  box-shadow:0 0 0 2px rgba(49,183,255,.25);
 }
 .msg,.empty{color:var(--text-muted);}
 .center{text-align:center;}
@@ -497,11 +499,21 @@ ${extraHead}
       <span class="brand-text">AdaptiveCaps</span>
     </a>
     <div class="lang-switch" id="lang-switch">
-      <button data-lang="pt-BR" title="Português" aria-label="Português">&#127463;&#127479;</button>
-      <button data-lang="en" title="English" aria-label="English">&#127482;&#127480;</button>
-      <button data-lang="es" title="Español" aria-label="Español">&#127466;&#127480;</button>
-      <button data-lang="fr" title="Français" aria-label="Français">&#127467;&#127479;</button>
-      <button data-lang="de" title="Deutsch" aria-label="Deutsch">&#127465;&#127466;</button>
+      <button data-lang="pt-BR" title="Português" aria-label="Português">
+        <svg viewBox="0 0 20 14" xmlns="http://www.w3.org/2000/svg"><rect width="20" height="14" fill="#009739"/><polygon points="10,1.5 18.5,7 10,12.5 1.5,7" fill="#FEDD00"/><circle cx="10" cy="7" r="3.2" fill="#002776"/></svg>
+      </button>
+      <button data-lang="en" title="English" aria-label="English">
+        <svg viewBox="0 0 20 14" xmlns="http://www.w3.org/2000/svg"><rect width="20" height="14" fill="#B22234"/><g fill="#fff"><rect y="1.08" width="20" height="1.08"/><rect y="3.23" width="20" height="1.08"/><rect y="5.38" width="20" height="1.08"/><rect y="7.54" width="20" height="1.08"/><rect y="9.69" width="20" height="1.08"/><rect y="11.85" width="20" height="1.08"/></g><rect width="8" height="7.54" fill="#3C3B6E"/></svg>
+      </button>
+      <button data-lang="es" title="Español" aria-label="Español">
+        <svg viewBox="0 0 20 14" xmlns="http://www.w3.org/2000/svg"><rect width="20" height="14" fill="#AA151B"/><rect y="3.5" width="20" height="7" fill="#F1BF00"/></svg>
+      </button>
+      <button data-lang="fr" title="Français" aria-label="Français">
+        <svg viewBox="0 0 20 14" xmlns="http://www.w3.org/2000/svg"><rect width="6.67" height="14" fill="#0055A4"/><rect x="6.67" width="6.67" height="14" fill="#fff"/><rect x="13.33" width="6.67" height="14" fill="#EF4135"/></svg>
+      </button>
+      <button data-lang="de" title="Deutsch" aria-label="Deutsch">
+        <svg viewBox="0 0 20 14" xmlns="http://www.w3.org/2000/svg"><rect width="20" height="4.67" fill="#000"/><rect y="4.67" width="20" height="4.67" fill="#DD0000"/><rect y="9.33" width="20" height="4.67" fill="#FFCE00"/></svg>
+      </button>
     </div>
   </div>
   <div class="nav-links" id="nav-links">
