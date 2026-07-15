@@ -607,14 +607,6 @@ document.addEventListener("DOMContentLoaded", function () {
   moveIndicatorTo(nav.querySelector("a.active"), false);
 
   links.forEach(function (link) {
-    link.addEventListener("mouseenter", function () { moveIndicatorTo(link, true); });
-  });
-
-  nav.addEventListener("mouseleave", function () {
-    moveIndicatorTo(nav.querySelector("a.active"), true);
-  });
-
-  links.forEach(function (link) {
     link.addEventListener("click", function (event) {
       if (link.classList.contains("active")) return;
       event.preventDefault();
