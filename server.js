@@ -482,10 +482,11 @@ h2.section-title .bar{
 function pageShell({ title, activeNav, body, extraHead = "" }) {
   return `
 <!DOCTYPE html>
-<html lang="pt-BR">
+<html lang="pt-BR" translate="no">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="google" content="notranslate">
 <title>${title}</title>
 <link rel="icon" type="image/png" href="/assets/logo.png">
 <style>${SITE_STYLES}</style>
