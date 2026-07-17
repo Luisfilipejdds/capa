@@ -3039,6 +3039,8 @@ function renderHomePage(stats, previewCapes) {
     <div class="compat-row">
       <span class="compat-chip"><span class="dot"></span>Fabric</span>
       <span class="compat-chip"><span class="dot"></span>NeoForge</span>
+    </div>
+    <div class="compat-row" style="margin-top:8px">
       <span class="compat-chip">MC 1.21.4</span>
       <span class="compat-chip">MC 1.21.8</span>
       <span class="compat-chip">MC 1.21.11</span>
