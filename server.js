@@ -211,6 +211,55 @@ h2.section-title .bar{
   font-size:13px;
   color:var(--text-muted);
 }
+.status-banner{
+  display:flex;
+  align-items:center;
+  gap:16px;
+  padding:22px 26px;
+  margin-bottom:28px;
+}
+.status-pulse{
+  position:relative;
+  width:16px;height:16px;
+  border-radius:50%;
+  background:#22c55e;
+  box-shadow:0 0 0 rgba(34,197,94,.55);
+  animation:status-pulse-anim 2s infinite;
+  flex-shrink:0;
+}
+@keyframes status-pulse-anim{
+  0%{box-shadow:0 0 0 0 rgba(34,197,94,.55);}
+  70%{box-shadow:0 0 0 10px rgba(34,197,94,0);}
+  100%{box-shadow:0 0 0 0 rgba(34,197,94,0);}
+}
+.status-banner-title{
+  font-size:20px;
+  font-weight:700;
+  color:#22c55e;
+}
+.status-banner-sub{
+  margin-top:4px;
+  font-size:13px;
+  color:var(--text-muted);
+}
+.stat-tile-icon{
+  text-align:left;
+}
+.stat-tile-icon .icon{
+  width:40px;height:40px;
+  border-radius:10px;
+  background:rgba(49,183,255,.12);
+  color:var(--accent);
+  display:flex;align-items:center;justify-content:center;
+  margin-bottom:14px;
+}
+.stat-tile-icon .icon svg{width:20px;height:20px;}
+.stat-tile-icon .value{font-size:24px;}
+.stat-tile-danger .icon{
+  background:rgba(239,68,68,.12);
+  color:var(--danger);
+}
+.stat-tile-danger .value{color:var(--danger);}
 .feature-grid{
   display:grid;
   grid-template-columns:repeat(auto-fit,minmax(220px,1fr));
@@ -2385,6 +2434,17 @@ function formatUptime(totalSeconds) {
   return `${seconds}s`;
 }
 
+const STATUS_ICONS = {
+  players: '<circle cx="12" cy="8" r="3.5"/><path d="M4 20c0-4 3.5-7 8-7s8 3 8 7"/>',
+  capes: '<path d="M8 4.5 4.5 7v3.5H7V19h10v-8.5h2.5V7L16 4.5l-2 2h-4l-2-2z"/>',
+  files: '<path d="M3 6.5a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8.5a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>',
+  banned: '<path d="M12 3l7 3v6c0 5-3.5 8-7 9-3.5-1-7-4-7-9V6l7-3z"/><path d="M9.3 9.3l5.4 5.4M14.7 9.3l-5.4 5.4"/>'
+};
+
+function statIcon(name) {
+  return `<div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">${STATUS_ICONS[name]}</svg></div>`;
+}
+
 function renderStatusPage(stats) {
   const t = SITE_I18N["pt-BR"];
   const body = `
@@ -2393,16 +2453,43 @@ function renderStatusPage(stats) {
     <h1 data-i18n="statusPageTitle">${escapeHtml(t.statusPageTitle)}</h1>
     <p data-i18n="statusPageDesc">${escapeHtml(t.statusPageDesc)}</p>
   </div>
-  <h2 class="section-title"><span class="bar"></span><span data-i18n="statsTitle">${escapeHtml(t.statsTitle)}</span></h2>
-  <div class="stat-grid">
-    <div class="card stat-tile"><div class="value" data-i18n="statOnline">${escapeHtml(t.statOnline)}</div><div class="label">Status</div></div>
-    <div class="card stat-tile"><div class="value">${escapeHtml(stats.version)}</div><div class="label" data-i18n="statVersion">${escapeHtml(t.statVersion)}</div></div>
-    <div class="card stat-tile"><div class="value">${escapeHtml(formatUptime(stats.uptimeSeconds))}</div><div class="label" data-i18n="statUptime">${escapeHtml(t.statUptime)}</div></div>
-    <div class="card stat-tile"><div class="value">${stats.totalPlayers}</div><div class="label" data-i18n="statPlayers">${escapeHtml(t.statPlayers)}</div></div>
-    <div class="card stat-tile"><div class="value">${stats.visibleCapes}</div><div class="label" data-i18n="statCapes">${escapeHtml(t.statCapes)}</div></div>
-    <div class="card stat-tile"><div class="value">${stats.totalCapeFiles}</div><div class="label" data-i18n="statFiles">${escapeHtml(t.statFiles)}</div></div>
-    <div class="card stat-tile"><div class="value">${stats.bannedPlayers}</div><div class="label" data-i18n="statBanned">${escapeHtml(t.statBanned)}</div></div>
+
+  <div class="card status-banner">
+    <div class="status-pulse"></div>
+    <div>
+      <div class="status-banner-title" data-i18n="statOnline">${escapeHtml(t.statOnline)}</div>
+      <div class="status-banner-sub">
+        <span data-i18n="statVersion">${escapeHtml(t.statVersion)}</span> ${escapeHtml(stats.version)}
+        &nbsp;·&nbsp;
+        <span data-i18n="statUptime">${escapeHtml(t.statUptime)}</span> ${escapeHtml(formatUptime(stats.uptimeSeconds))}
+      </div>
+    </div>
   </div>
+
+  <h2 class="section-title"><span class="bar"></span><span data-i18n="statsTitle">${escapeHtml(t.statsTitle)}</span></h2>
+  <div class="stat-grid stat-grid-icons">
+    <div class="card stat-tile stat-tile-icon">
+      ${statIcon("players")}
+      <div class="value">${stats.totalPlayers}</div>
+      <div class="label" data-i18n="statPlayers">${escapeHtml(t.statPlayers)}</div>
+    </div>
+    <div class="card stat-tile stat-tile-icon">
+      ${statIcon("capes")}
+      <div class="value">${stats.visibleCapes}</div>
+      <div class="label" data-i18n="statCapes">${escapeHtml(t.statCapes)}</div>
+    </div>
+    <div class="card stat-tile stat-tile-icon">
+      ${statIcon("files")}
+      <div class="value">${stats.totalCapeFiles}</div>
+      <div class="label" data-i18n="statFiles">${escapeHtml(t.statFiles)}</div>
+    </div>
+    <div class="card stat-tile stat-tile-icon stat-tile-danger">
+      ${statIcon("banned")}
+      <div class="value">${stats.bannedPlayers}</div>
+      <div class="label" data-i18n="statBanned">${escapeHtml(t.statBanned)}</div>
+    </div>
+  </div>
+
   <div class="center" style="margin-top:36px">
     <a class="btn btn-outline" href="/capes" data-i18n="viewGalleryBtn">${escapeHtml(t.viewGalleryBtn)}</a>
   </div>
