@@ -219,6 +219,15 @@ h2.section-title .bar{
 .feature-card{
   padding:22px;
 }
+.feature-card .icon{
+  width:40px;height:40px;
+  border-radius:10px;
+  background:rgba(49,183,255,.12);
+  color:var(--accent);
+  display:flex;align-items:center;justify-content:center;
+  margin-bottom:14px;
+}
+.feature-card .icon svg{width:20px;height:20px;}
 .feature-card h3{
   font-size:16px;
   margin:0 0 8px;
@@ -315,6 +324,29 @@ h2.section-title .bar{
   flex-wrap:wrap;
   justify-content:center;
   margin-top:18px;
+}
+.compat-row{
+  display:flex;
+  gap:8px;
+  flex-wrap:wrap;
+  justify-content:center;
+  margin-top:22px;
+}
+.compat-chip{
+  display:flex;
+  align-items:center;
+  gap:6px;
+  padding:6px 12px;
+  border-radius:999px;
+  border:1px solid var(--border);
+  background:var(--surface);
+  font-size:12px;
+  font-weight:600;
+  color:var(--text-muted);
+}
+.compat-chip .dot{
+  width:6px;height:6px;border-radius:50%;
+  background:var(--accent);
 }
 .tutorial-steps{
   display:grid;
@@ -2876,8 +2908,16 @@ function renderHomePage(stats, previewCapes) {
       }).join("")
     : `<p class="msg" data-i18n="galleryEmpty">${escapeHtml(t.galleryEmpty)}</p>`;
 
+  const FEATURE_ICONS = [
+    '<path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8L12 3z"/>',
+    '<path d="M12 3l9 5-9 5-9-5 9-5z"/><path d="M3 13l9 5 9-5"/>',
+    '<path d="M17.5 18H6a4 4 0 0 1-.4-8 5.5 5.5 0 0 1 10.7-2A4.5 4.5 0 0 1 17.5 18z"/>',
+    '<circle cx="12" cy="12" r="9"/><path d="M8 12.5l2.5 2.5 5-5"/>'
+  ];
+
   const featuresHtml = t.features.map((feature, index) => `
     <div class="card feature-card">
+      <div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">${FEATURE_ICONS[index] ?? ""}</svg></div>
       <h3 data-i18n-feature="${index}:title">${escapeHtml(feature.title)}</h3>
       <p data-i18n-feature="${index}:desc">${escapeHtml(feature.desc)}</p>
     </div>`).join("");
@@ -2908,6 +2948,15 @@ function renderHomePage(stats, previewCapes) {
     <div class="download-row">
       <a class="btn btn-primary" href="${escapeHtml(MODRINTH_URL)}" target="_blank" rel="noopener" data-i18n="downloadModrinth">${escapeHtml(t.downloadModrinth)}</a>
       <a class="btn btn-outline" href="${escapeHtml(CURSEFORGE_URL)}" target="_blank" rel="noopener" data-i18n="downloadCurseforge">${escapeHtml(t.downloadCurseforge)}</a>
+    </div>
+    <div class="compat-row">
+      <span class="compat-chip"><span class="dot"></span>Fabric</span>
+      <span class="compat-chip"><span class="dot"></span>NeoForge</span>
+      <span class="compat-chip">MC 1.21.4</span>
+      <span class="compat-chip">MC 1.21.8</span>
+      <span class="compat-chip">MC 1.21.11</span>
+      <span class="compat-chip">MC 26.1</span>
+      <span class="compat-chip">MC 26.2</span>
     </div>
   </div>
 
