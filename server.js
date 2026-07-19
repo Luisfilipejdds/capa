@@ -211,6 +211,13 @@ h2.section-title .bar{
   font-size:13px;
   color:var(--text-muted);
 }
+.ban-timer{
+  margin-top:4px;
+  font-size:11px;
+  color:var(--text-muted);
+  opacity:.75;
+}
+.stat-tile-danger .ban-timer{color:var(--danger);opacity:.7;}
 .status-banner{
   display:flex;
   align-items:center;
@@ -652,6 +659,35 @@ document.querySelectorAll("#lang-switch button").forEach(function (btn) {
   btn.addEventListener("click", function () { applyLanguage(btn.dataset.lang); });
 });
 
+function formatDurationShort(totalSeconds) {
+  const s = Math.max(0, Math.floor(totalSeconds));
+  if (s < 60) return s + "s";
+  const m = Math.floor(s / 60);
+  if (m < 60) return m + "m " + (s % 60) + "s";
+  const h = Math.floor(m / 60);
+  if (h < 24) return h + "h " + (m % 60) + "m";
+  const d = Math.floor(h / 24);
+  return d + "d " + (h % 24) + "h";
+}
+
+function updateBanTimers() {
+  const lang = document.documentElement.lang || "pt-BR";
+  const dict = I18N[lang] || I18N["pt-BR"];
+  document.querySelectorAll("[data-last-ban]").forEach(function (el) {
+    const lastBan = Number(el.getAttribute("data-last-ban"));
+    if (!lastBan) {
+      el.textContent = dict.banTimerNone;
+      return;
+    }
+    const elapsed = (Date.now() - lastBan) / 1000;
+    el.textContent = dict.banTimerFormat.replace("{time}", formatDurationShort(elapsed));
+  });
+}
+
+onLanguageChange.push(updateBanTimers);
+document.addEventListener("DOMContentLoaded", updateBanTimers);
+setInterval(updateBanTimers, 1000);
+
 document.addEventListener("DOMContentLoaded", function () {
   // Precisa esperar o DOM terminar de parsear: esse script roda antes do
   // conteudo da pagina (\${body}) no HTML, entao os elementos com data-i18n
@@ -721,7 +757,12 @@ app.use(express.json({ limit: `${jsonLimitBytes}b` }));
 function computeStats(metadata, totalCapeFiles, storageSizeMb) {
   const totalPlayers = Object.keys(metadata).length;
   const visibleCapes = Object.values(metadata).filter(entry => entry?.visible === true).length;
-  const bannedPlayers = Object.values(metadata).filter(entry => entry?.banned === true).length;
+  const bannedEntries = Object.values(metadata).filter(entry => entry?.banned === true);
+  const bannedPlayers = bannedEntries.length;
+  const lastBanAt = bannedEntries.reduce((max, entry) => {
+    const value = Number(entry.bannedAt);
+    return Number.isSafeInteger(value) && value > max ? value : max;
+  }, 0);
   return {
     ok: true,
     version: packageVersion,
@@ -729,6 +770,7 @@ function computeStats(metadata, totalCapeFiles, storageSizeMb) {
     totalPlayers,
     visibleCapes,
     bannedPlayers,
+    lastBanAt,
     totalCapeFiles,
     storageSizeMb: Number(storageSizeMb)
   };
@@ -2434,6 +2476,17 @@ function formatUptime(totalSeconds) {
   return `${seconds}s`;
 }
 
+function formatDurationShort(totalSeconds) {
+  const s = Math.max(0, Math.floor(totalSeconds));
+  if (s < 60) return `${s}s`;
+  const m = Math.floor(s / 60);
+  if (m < 60) return `${m}m ${s % 60}s`;
+  const h = Math.floor(m / 60);
+  if (h < 24) return `${h}h ${m % 60}m`;
+  const d = Math.floor(h / 24);
+  return `${d}d ${h % 24}h`;
+}
+
 const STATUS_ICONS = {
   players: '<circle cx="12" cy="8" r="3.5"/><path d="M4 20c0-4 3.5-7 8-7s8 3 8 7"/>',
   capes: '<path d="M8 4.5 4.5 7v3.5H7V19h10v-8.5h2.5V7L16 4.5l-2 2h-4l-2-2z"/>',
@@ -2487,6 +2540,7 @@ function renderStatusPage(stats) {
       ${statIcon("banned")}
       <div class="value">${stats.bannedPlayers}</div>
       <div class="label" data-i18n="statBanned">${escapeHtml(t.statBanned)}</div>
+      <div class="ban-timer" data-last-ban="${stats.lastBanAt}">${stats.lastBanAt ? escapeHtml(t.banTimerFormat.replace("{time}", formatDurationShort(Math.floor((Date.now() - stats.lastBanAt) / 1000)))) : escapeHtml(t.banTimerNone)}</div>
     </div>
   </div>
 
@@ -2514,6 +2568,8 @@ const SITE_I18N = {
     statPlayers: "Jogadores",
     statCapes: "Capas visíveis",
     statBanned: "Jogadores banidos",
+    banTimerFormat: "há {time}",
+    banTimerNone: "Nenhum banimento registrado",
     statStorage: "Dados armazenados",
     galleryTitle: "Algumas capas da comunidade",
     galleryDesc: "Uma amostra das capas que os jogadores deixaram públicas.",
@@ -2610,6 +2666,8 @@ const SITE_I18N = {
     statPlayers: "Players",
     statCapes: "Visible capes",
     statBanned: "Banned players",
+    banTimerFormat: "{time} ago",
+    banTimerNone: "No bans recorded",
     statStorage: "Stored data",
     galleryTitle: "Some capes from the community",
     galleryDesc: "A sample of the capes players have made public.",
@@ -2706,6 +2764,8 @@ const SITE_I18N = {
     statPlayers: "Jugadores",
     statCapes: "Capas visibles",
     statBanned: "Jugadores baneados",
+    banTimerFormat: "hace {time}",
+    banTimerNone: "Sin baneos registrados",
     statStorage: "Datos almacenados",
     galleryTitle: "Algunas capas de la comunidad",
     galleryDesc: "Una muestra de las capas que los jugadores hicieron públicas.",
@@ -2802,6 +2862,8 @@ const SITE_I18N = {
     statPlayers: "Joueurs",
     statCapes: "Capes visibles",
     statBanned: "Joueurs bannis",
+    banTimerFormat: "il y a {time}",
+    banTimerNone: "Aucun bannissement enregistré",
     statStorage: "Données stockées",
     galleryTitle: "Quelques capes de la communauté",
     galleryDesc: "Un aperçu des capes que les joueurs ont rendues publiques.",
@@ -2898,6 +2960,8 @@ const SITE_I18N = {
     statPlayers: "Spieler",
     statCapes: "Sichtbare Umhänge",
     statBanned: "Gesperrte Spieler",
+    banTimerFormat: "vor {time}",
+    banTimerNone: "Keine Sperren erfasst",
     statStorage: "Gespeicherte Daten",
     galleryTitle: "Einige Umhänge der Community",
     galleryDesc: "Eine Auswahl der Umhänge, die Spieler öffentlich gemacht haben.",
@@ -3057,7 +3121,11 @@ function renderHomePage(stats, previewCapes) {
     <div class="card stat-tile"><div class="value" data-i18n="statOnline">${escapeHtml(t.statOnline)}</div><div class="label">Status</div></div>
     <div class="card stat-tile"><div class="value">${stats.totalPlayers}</div><div class="label" data-i18n="statPlayers">${escapeHtml(t.statPlayers)}</div></div>
     <div class="card stat-tile"><div class="value">${stats.visibleCapes}</div><div class="label" data-i18n="statCapes">${escapeHtml(t.statCapes)}</div></div>
-    <div class="card stat-tile"><div class="value">${stats.bannedPlayers}</div><div class="label" data-i18n="statBanned">${escapeHtml(t.statBanned)}</div></div>
+    <div class="card stat-tile stat-tile-danger">
+      <div class="value">${stats.bannedPlayers}</div>
+      <div class="label" data-i18n="statBanned">${escapeHtml(t.statBanned)}</div>
+      <div class="ban-timer" data-last-ban="${stats.lastBanAt}">${stats.lastBanAt ? escapeHtml(t.banTimerFormat.replace("{time}", formatDurationShort(Math.floor((Date.now() - stats.lastBanAt) / 1000)))) : escapeHtml(t.banTimerNone)}</div>
+    </div>
   </div>
 
   <h2 class="section-title"><span class="bar"></span><span data-i18n="galleryTitle">${escapeHtml(t.galleryTitle)}</span></h2>
