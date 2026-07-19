@@ -211,13 +211,19 @@ h2.section-title .bar{
   font-size:13px;
   color:var(--text-muted);
 }
-.ban-timer{
-  margin-top:4px;
-  font-size:11px;
-  color:var(--text-muted);
-  opacity:.75;
+.ban-notice{
+  display:inline-flex;
+  align-items:center;
+  gap:8px;
+  padding:8px 16px;
+  border-radius:999px;
+  background:rgba(239,68,68,.1);
+  border:1px solid rgba(239,68,68,.3);
+  color:var(--danger);
+  font-size:12px;
+  font-weight:600;
 }
-.stat-tile-danger .ban-timer{color:var(--danger);opacity:.7;}
+.ban-notice svg{width:14px;height:14px;flex-shrink:0;}
 .status-banner{
   display:flex;
   align-items:center;
@@ -2498,6 +2504,19 @@ function statIcon(name) {
   return `<div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">${STATUS_ICONS[name]}</svg></div>`;
 }
 
+function banNoticeHtml(t, stats) {
+  if (!stats.lastBanAt) return "";
+  const timeText = escapeHtml(t.banTimerFormat.replace("{time}", formatDurationShort(Math.floor((Date.now() - stats.lastBanAt) / 1000))));
+  return `
+  <div class="center" style="margin-top:16px">
+    <span class="ban-notice">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${STATUS_ICONS.banned}</svg>
+      <span data-i18n="banNoticeLabel">${escapeHtml(t.banNoticeLabel)}</span>
+      <span class="ban-timer-inline" data-last-ban="${stats.lastBanAt}">${timeText}</span>
+    </span>
+  </div>`;
+}
+
 function renderStatusPage(stats) {
   const t = SITE_I18N["pt-BR"];
   const body = `
@@ -2518,6 +2537,7 @@ function renderStatusPage(stats) {
       </div>
     </div>
   </div>
+  ${banNoticeHtml(t, stats)}
 
   <h2 class="section-title"><span class="bar"></span><span data-i18n="statsTitle">${escapeHtml(t.statsTitle)}</span></h2>
   <div class="stat-grid stat-grid-icons">
@@ -2540,7 +2560,6 @@ function renderStatusPage(stats) {
       ${statIcon("banned")}
       <div class="value">${stats.bannedPlayers}</div>
       <div class="label" data-i18n="statBanned">${escapeHtml(t.statBanned)}</div>
-      <div class="ban-timer" data-last-ban="${stats.lastBanAt}">${stats.lastBanAt ? escapeHtml(t.banTimerFormat.replace("{time}", formatDurationShort(Math.floor((Date.now() - stats.lastBanAt) / 1000)))) : escapeHtml(t.banTimerNone)}</div>
     </div>
   </div>
 
@@ -2570,6 +2589,7 @@ const SITE_I18N = {
     statBanned: "Jogadores banidos",
     banTimerFormat: "há {time}",
     banTimerNone: "Nenhum banimento registrado",
+    banNoticeLabel: "Último banimento:",
     statStorage: "Dados armazenados",
     galleryTitle: "Algumas capas da comunidade",
     galleryDesc: "Uma amostra das capas que os jogadores deixaram públicas.",
@@ -2668,6 +2688,7 @@ const SITE_I18N = {
     statBanned: "Banned players",
     banTimerFormat: "{time} ago",
     banTimerNone: "No bans recorded",
+    banNoticeLabel: "Last ban:",
     statStorage: "Stored data",
     galleryTitle: "Some capes from the community",
     galleryDesc: "A sample of the capes players have made public.",
@@ -2766,6 +2787,7 @@ const SITE_I18N = {
     statBanned: "Jugadores baneados",
     banTimerFormat: "hace {time}",
     banTimerNone: "Sin baneos registrados",
+    banNoticeLabel: "Último baneo:",
     statStorage: "Datos almacenados",
     galleryTitle: "Algunas capas de la comunidad",
     galleryDesc: "Una muestra de las capas que los jugadores hicieron públicas.",
@@ -2864,6 +2886,7 @@ const SITE_I18N = {
     statBanned: "Joueurs bannis",
     banTimerFormat: "il y a {time}",
     banTimerNone: "Aucun bannissement enregistré",
+    banNoticeLabel: "Dernier bannissement :",
     statStorage: "Données stockées",
     galleryTitle: "Quelques capes de la communauté",
     galleryDesc: "Un aperçu des capes que les joueurs ont rendues publiques.",
@@ -2962,6 +2985,7 @@ const SITE_I18N = {
     statBanned: "Gesperrte Spieler",
     banTimerFormat: "vor {time}",
     banTimerNone: "Keine Sperren erfasst",
+    banNoticeLabel: "Letzte Sperre:",
     statStorage: "Gespeicherte Daten",
     galleryTitle: "Einige Umhänge der Community",
     galleryDesc: "Eine Auswahl der Umhänge, die Spieler öffentlich gemacht haben.",
@@ -3111,6 +3135,7 @@ function renderHomePage(stats, previewCapes) {
       <span class="compat-chip">MC 26.1</span>
       <span class="compat-chip">MC 26.2</span>
     </div>
+    ${banNoticeHtml(t, stats)}
   </div>
 
   <h2 class="section-title"><span class="bar"></span><span data-i18n="featuresTitle">${escapeHtml(t.featuresTitle)}</span></h2>
@@ -3124,7 +3149,6 @@ function renderHomePage(stats, previewCapes) {
     <div class="card stat-tile stat-tile-danger">
       <div class="value">${stats.bannedPlayers}</div>
       <div class="label" data-i18n="statBanned">${escapeHtml(t.statBanned)}</div>
-      <div class="ban-timer" data-last-ban="${stats.lastBanAt}">${stats.lastBanAt ? escapeHtml(t.banTimerFormat.replace("{time}", formatDurationShort(Math.floor((Date.now() - stats.lastBanAt) / 1000)))) : escapeHtml(t.banTimerNone)}</div>
     </div>
   </div>
 
