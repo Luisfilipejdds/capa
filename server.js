@@ -330,6 +330,79 @@ h2.section-title .bar{
   color:#5b6779;
   word-break:break-all;
 }
+.cape-card img{cursor:pointer;}
+.cape-modal-backdrop{
+  display:none;
+  position:fixed;
+  inset:0;
+  background:rgba(3,6,12,.78);
+  z-index:1000;
+  align-items:center;
+  justify-content:center;
+  padding:24px;
+}
+.cape-modal-backdrop.open{display:flex;}
+.cape-modal{
+  background:var(--surface);
+  border:1px solid var(--border);
+  border-radius:var(--radius);
+  box-shadow:var(--shadow);
+  max-width:640px;
+  width:100%;
+  max-height:85vh;
+  overflow-y:auto;
+  padding:24px;
+  position:relative;
+}
+.cape-modal-close{
+  position:absolute;
+  top:14px;
+  right:14px;
+  width:32px;
+  height:32px;
+  border-radius:8px;
+  border:1px solid var(--border);
+  background:var(--surface-2);
+  color:var(--text-muted);
+  font-size:16px;
+  cursor:pointer;
+  line-height:1;
+}
+.cape-modal-close:hover{color:#fff;border-color:var(--accent);}
+.cape-modal h2{
+  font-size:18px;
+  margin:0 0 4px;
+  padding-right:36px;
+}
+.cape-modal .muted{font-size:12px;color:var(--text-muted);margin-bottom:18px;}
+.cape-modal-section-title{
+  font-size:12px;
+  text-transform:uppercase;
+  letter-spacing:.5px;
+  color:var(--text-muted);
+  margin:18px 0 10px;
+}
+.cape-modal-grid{
+  display:grid;
+  grid-template-columns:repeat(auto-fill,minmax(120px,1fr));
+  gap:14px;
+}
+.cape-modal-item{text-align:center;}
+.cape-modal-item img{
+  width:100%;
+  max-width:140px;
+  image-rendering:pixelated;
+  background:var(--surface-2);
+  border-radius:10px;
+  padding:8px;
+  border:1px solid var(--border);
+}
+.cape-modal-item span{
+  display:block;
+  margin-top:6px;
+  font-size:11px;
+  color:var(--text-muted);
+}
 .player-card{
   padding:20px;
   text-align:center;
@@ -989,11 +1062,23 @@ app.get("/capes", (req, res) => {
   </label>
   <div id="content" class="cape-grid" style="margin-top:8px"><p class="msg center">${escapeHtml(t.loadingText)}</p></div>
 </div>
+<div class="cape-modal-backdrop" id="cape-modal-backdrop">
+  <div class="cape-modal">
+    <button class="cape-modal-close" id="cape-modal-close" aria-label="Close">&times;</button>
+    <h2 id="cape-modal-username"></h2>
+    <p class="muted" id="cape-modal-updated"></p>
+    <p class="cape-modal-section-title" data-i18n="capeModalEquippedLabel">${escapeHtml(t.capeModalEquippedLabel)}</p>
+    <div class="cape-modal-grid" id="cape-modal-equipped"></div>
+    <p class="cape-modal-section-title" data-i18n="capeModalSlotsLabel">${escapeHtml(t.capeModalSlotsLabel)}</p>
+    <div class="cape-modal-grid" id="cape-modal-slots"></div>
+  </div>
+</div>
 <script>
 const LOCALE_MAP = { "pt-BR": "pt-BR", en: "en-US", es: "es-ES", fr: "fr-FR", de: "de-DE" };
 let allCapes = [];
 let lastQuery = "";
 let capesDict = I18N[document.documentElement.lang] || I18N["pt-BR"];
+let capeModalRequestId = 0;
 
 function escapeHtml(value) {
   const div = document.createElement("div");
@@ -1036,9 +1121,9 @@ function renderCapes(capes) {
     const imageUrl = entry.hasOriginal ? "/original-image/" + entry.uuid : "/cape-image/" + entry.uuid + ".png";
     return (
       '<div class="card cape-card">' +
-      '<a href="' + imageUrl + '" target="_blank">' +
-      '<img src="' + imageUrl + '" alt="Cape ' + escapeHtml(entry.username || entry.uuid) + '" loading="lazy">' +
-      "</a>" +
+      '<img src="' + imageUrl + '" alt="Cape ' + escapeHtml(entry.username || entry.uuid) + '" loading="lazy" ' +
+      'data-uuid="' + escapeHtml(entry.uuid) + '" data-username="' + escapeHtml(entry.username || entry.uuid) + '" ' +
+      'data-image="' + escapeHtml(imageUrl) + '" data-updated="' + escapeHtml(updated) + '">' +
       "<h3>" + escapeHtml(entry.username || "unknown") + "</h3>" +
       '<p class="muted">' + escapeHtml(capesDict.updatedLabel) + escapeHtml(updated) + "</p>" +
       '<p class="hash">' + escapeHtml(String(entry.hash || "").slice(0, 12)) + "...</p>" +
@@ -1046,6 +1131,85 @@ function renderCapes(capes) {
     );
   }).join("");
 }
+
+document.getElementById("content").addEventListener("click", function (event) {
+  const img = event.target.closest(".cape-card img");
+  if (!img) {
+    return;
+  }
+  openCapeModal(img.dataset.uuid, img.dataset.username, img.dataset.image, img.dataset.updated);
+});
+
+function capeMimeFromType(type) {
+  return String(type || "").toUpperCase() === "GIF" ? "image/gif" : "image/png";
+}
+
+function renderCapeModalItem(imageSrc, label) {
+  return (
+    '<div class="cape-modal-item">' +
+    '<a href="' + imageSrc + '" target="_blank"><img src="' + imageSrc + '" alt="' + escapeHtml(label) + '"></a>' +
+    "<span>" + escapeHtml(label) + "</span>" +
+    "</div>"
+  );
+}
+
+async function openCapeModal(uuid, username, equippedImageUrl, updated) {
+  const requestId = ++capeModalRequestId;
+  document.getElementById("cape-modal-username").textContent = username;
+  document.getElementById("cape-modal-updated").textContent = capesDict.updatedLabel + updated;
+  document.getElementById("cape-modal-equipped").innerHTML = renderCapeModalItem(equippedImageUrl, capesDict.capeModalEquippedLabel);
+  document.getElementById("cape-modal-slots").innerHTML = '<p class="msg" style="grid-column:1/-1">' + escapeHtml(capesDict.capeModalLoadingSlots) + "</p>";
+  document.getElementById("cape-modal-backdrop").classList.add("open");
+
+  try {
+    const response = await fetch("/api/v1/library/" + encodeURIComponent(uuid));
+    if (requestId !== capeModalRequestId) {
+      return; // modal foi trocado/fechado antes dessa resposta chegar
+    }
+    const slotsContainer = document.getElementById("cape-modal-slots");
+    if (!response.ok) {
+      slotsContainer.innerHTML = '<p class="msg" style="grid-column:1/-1">' + escapeHtml(capesDict.capeModalNoSlots) + "</p>";
+      return;
+    }
+    const data = await response.json();
+    const slots = Array.isArray(data.slots) ? data.slots : [];
+    if (slots.length === 0) {
+      slotsContainer.innerHTML = '<p class="msg" style="grid-column:1/-1">' + escapeHtml(capesDict.capeModalNoSlots) + "</p>";
+      return;
+    }
+    slotsContainer.innerHTML = slots
+      .slice()
+      .sort((a, b) => (a.slot || 0) - (b.slot || 0))
+      .map(function (slot) {
+        const src = "data:" + capeMimeFromType(slot.type) + ";base64," + slot.fileBase64;
+        const label = capesDict.capeModalSlotLabel + (slot.slot || "?") + (slot.name && slot.name !== "Slot " + slot.slot ? " - " + slot.name : "");
+        return renderCapeModalItem(src, label);
+      })
+      .join("");
+  } catch (error) {
+    if (requestId !== capeModalRequestId) {
+      return;
+    }
+    document.getElementById("cape-modal-slots").innerHTML = '<p class="msg" style="grid-column:1/-1">' + escapeHtml(capesDict.capeModalNoSlots) + "</p>";
+  }
+}
+
+function closeCapeModal() {
+  capeModalRequestId++;
+  document.getElementById("cape-modal-backdrop").classList.remove("open");
+}
+
+document.getElementById("cape-modal-close").addEventListener("click", closeCapeModal);
+document.getElementById("cape-modal-backdrop").addEventListener("click", function (event) {
+  if (event.target.id === "cape-modal-backdrop") {
+    closeCapeModal();
+  }
+});
+document.addEventListener("keydown", function (event) {
+  if (event.key === "Escape") {
+    closeCapeModal();
+  }
+});
 
 function currentFiltered() {
   let result = allCapes;
@@ -2656,7 +2820,13 @@ const SITE_I18N = {
     errorLoadingText: "Falha ao carregar (status ",
     noneFoundText: "Nenhuma capa encontrada.",
     updatedLabel: "Atualizada: ",
-    unknownDate: "Desconhecido"
+    unknownDate: "Desconhecido",
+    capeModalEquippedLabel: "Capa equipada",
+    capeModalSlotsLabel: "Capas salvas em slots",
+    capeModalNoSlots: "Nenhuma capa salva em slot.",
+    capeModalLoadingSlots: "Carregando slots...",
+    capeModalClose: "Fechar",
+    capeModalSlotLabel: "Slot "
   },
   en: {
     heroBadge: "Cloud cape sync",
@@ -2754,7 +2924,13 @@ const SITE_I18N = {
     errorLoadingText: "Failed to load (status ",
     noneFoundText: "No capes found.",
     updatedLabel: "Updated: ",
-    unknownDate: "Unknown"
+    unknownDate: "Unknown",
+    capeModalEquippedLabel: "Equipped cape",
+    capeModalSlotsLabel: "Capes saved in slots",
+    capeModalNoSlots: "No cape saved in a slot.",
+    capeModalLoadingSlots: "Loading slots...",
+    capeModalClose: "Close",
+    capeModalSlotLabel: "Slot "
   },
   es: {
     heroBadge: "Sincronización de capas en la nube",
@@ -2852,7 +3028,13 @@ const SITE_I18N = {
     errorLoadingText: "Fallo al cargar (status ",
     noneFoundText: "No se encontraron capas.",
     updatedLabel: "Actualizada: ",
-    unknownDate: "Desconocido"
+    unknownDate: "Desconocido",
+    capeModalEquippedLabel: "Capa equipada",
+    capeModalSlotsLabel: "Capas guardadas en slots",
+    capeModalNoSlots: "Ninguna capa guardada en un slot.",
+    capeModalLoadingSlots: "Cargando slots...",
+    capeModalClose: "Cerrar",
+    capeModalSlotLabel: "Slot "
   },
   fr: {
     heroBadge: "Synchronisation de capes dans le cloud",
@@ -2950,7 +3132,13 @@ const SITE_I18N = {
     errorLoadingText: "Échec du chargement (status ",
     noneFoundText: "Aucune cape trouvée.",
     updatedLabel: "Mise à jour : ",
-    unknownDate: "Inconnu"
+    unknownDate: "Inconnu",
+    capeModalEquippedLabel: "Cape équipée",
+    capeModalSlotsLabel: "Capes enregistrées dans les slots",
+    capeModalNoSlots: "Aucune cape enregistrée dans un slot.",
+    capeModalLoadingSlots: "Chargement des slots...",
+    capeModalClose: "Fermer",
+    capeModalSlotLabel: "Slot "
   },
   de: {
     heroBadge: "Cloud-Umhang-Synchronisierung",
@@ -3048,7 +3236,13 @@ const SITE_I18N = {
     errorLoadingText: "Laden fehlgeschlagen (status ",
     noneFoundText: "Keine Umhänge gefunden.",
     updatedLabel: "Aktualisiert: ",
-    unknownDate: "Unbekannt"
+    unknownDate: "Unbekannt",
+    capeModalEquippedLabel: "Ausgerüsteter Umhang",
+    capeModalSlotsLabel: "In Slots gespeicherte Umhänge",
+    capeModalNoSlots: "Kein Umhang in einem Slot gespeichert.",
+    capeModalLoadingSlots: "Slots werden geladen...",
+    capeModalClose: "Schließen",
+    capeModalSlotLabel: "Slot "
   }
 };
 
