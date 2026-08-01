@@ -43,6 +43,9 @@ const MODRINTH_URL = "https://modrinth.com/mod/adaptivecaps/versions";
 const CURSEFORGE_URL = "https://www.curseforge.com/minecraft/mc-mods/adaptivecaps/files/all?page=1&pageSize=20&showAlphaFiles=show";
 const SPONSOR_URL = "https://streethosting.com.br/aff/32";
 const DISCORD_USERNAME = "luisfilipejdds7";
+// Liga/desliga a galeria publica (home + /capes) sem remover nada do codigo
+// ou dos dados - so troca a secao/pagina por um aviso de manutencao.
+const GALLERY_MAINTENANCE = true;
 
 // Design compartilhado por todas as paginas HTML do site (publico e admin),
 // pra tudo ter a mesma cara em vez de cada rota reinventar seu proprio CSS.
@@ -1049,6 +1052,16 @@ app.get("/capes", (req, res) => {
   // ninguem precisa (nem tem motivo pra) salvar um link com token pra ver a
   // galeria publica.
   const t = SITE_I18N["pt-BR"];
+  if (GALLERY_MAINTENANCE) {
+    const maintenanceBody = `
+<div class="container">
+  <div class="hero">
+    <h1 data-i18n="capesPageTitle">${escapeHtml(t.capesPageTitle)}</h1>
+    <p class="msg center">Galeria em manutenção. Voltamos em breve.</p>
+  </div>
+</div>`;
+    return res.type("html").send(pageShell({ title: "AdaptiveCaps - Galeria", activeNav: "capes", body: maintenanceBody }));
+  }
   const body = `
 <div class="container">
   <div class="hero">
@@ -3335,6 +3348,10 @@ function renderHomePage(stats, previewCapes) {
     </div>
   </div>
 
+  ${GALLERY_MAINTENANCE ? `
+  <h2 class="section-title"><span class="bar"></span><span data-i18n="galleryTitle">${escapeHtml(t.galleryTitle)}</span></h2>
+  <p class="msg center">Galeria em manutenção. Voltamos em breve.</p>
+  ` : `
   <h2 class="section-title"><span class="bar"></span><span data-i18n="galleryTitle">${escapeHtml(t.galleryTitle)}</span></h2>
   <p class="msg" data-i18n="galleryDesc">${escapeHtml(t.galleryDesc)}</p>
   <a href="/capes" style="text-decoration:none">
@@ -3343,6 +3360,7 @@ function renderHomePage(stats, previewCapes) {
   <div class="center" style="margin-top:22px">
     <a class="btn btn-outline" href="/capes" data-i18n="galleryCta">${escapeHtml(t.galleryCta)}</a>
   </div>
+  `}
 
   <h2 class="section-title"><span class="bar"></span><span data-i18n="tutorialTitle">${escapeHtml(t.tutorialTitle)}</span></h2>
   <div>${tutorialHtml}</div>
