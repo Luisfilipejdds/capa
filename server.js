@@ -1118,7 +1118,10 @@ function renderCapes(capes) {
 
   content.innerHTML = capes.map(function (entry) {
     const updated = entry.updatedAt ? new Date(entry.updatedAt).toLocaleString(locale) : capesDict.unknownDate;
-    const imageUrl = entry.hasOriginal ? "/original-image/" + entry.uuid : "/cape-image/" + entry.uuid + ".png";
+    // Miniatura do card usa sempre o PNG ja renderizado (pequeno) - usar o
+    // arquivo original aqui (que pode ter varios MB, ex: GIFs) gerava um pico
+    // de rede gigante toda vez que alguem abria a galeria publica.
+    const imageUrl = "/cape-image/" + entry.uuid + ".png";
     return (
       '<div class="card cape-card">' +
       '<img src="' + imageUrl + '" alt="Cape ' + escapeHtml(entry.username || entry.uuid) + '" loading="lazy" ' +
@@ -3251,7 +3254,9 @@ function renderHomePage(stats, previewCapes) {
 
   const capesHtml = previewCapes.length > 0
     ? previewCapes.map(entry => {
-        const imageUrl = entry.hasOriginal ? "/original-image/" + entry.uuid : "/cape-image/" + entry.uuid + ".png";
+        // Mesma razao do /capes: miniatura sempre com o PNG renderizado, nunca
+        // o arquivo original (pico de rede gigante na home a cada visita).
+        const imageUrl = "/cape-image/" + entry.uuid + ".png";
         return (
           '<div class="cape-card">' +
           '<img src="' + imageUrl + '" alt="Cape ' + escapeHtml(entry.username || entry.uuid) + '" loading="lazy">' +
